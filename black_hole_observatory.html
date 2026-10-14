@@ -1,0 +1,2314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Black Hole Observatory — Interactive Kerr Simulation</title>
+    <style>
+        :root {
+            --bg-dark: #030712;
+            --panel-bg: rgba(13, 18, 30, 0.75);
+            --panel-border: rgba(255, 255, 255, 0.12);
+            --accent-cyan: #06b6d4;
+            --accent-gold: #f59e0b;
+            --accent-blue: #3b82f6;
+            --text-main: #f3f4f6;
+            --text-dim: #9ca3af;
+            --font-stack: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-dark);
+            font-family: var(--font-stack);
+            color: var(--text-main);
+        }
+
+        canvas#webgl-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Glassmorphism UI Panels */
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            color: var(--text-main);
+            z-index: 10;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        /* Header Title HUD */
+        #header-hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 16px 20px;
+            max-width: 380px;
+            pointer-events: auto;
+        }
+
+        #header-hud h1 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, #ffffff 0%, var(--accent-cyan) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+
+        #header-hud p {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            line-height: 1.3;
+        }
+
+        /* Telemetry HUD Panel */
+        #telemetry-hud {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            padding: 16px 20px;
+            min-width: 280px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.78rem;
+        }
+
+        .telemetry-title {
+            font-family: var(--font-stack);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent-cyan);
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 4px;
+        }
+
+        .telemetry-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .telemetry-label {
+            color: var(--text-dim);
+        }
+
+        .telemetry-value {
+            color: #6ee7b7;
+            font-weight: 600;
+        }
+
+        /* Main Controls Panel */
+        #controls-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 340px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            padding: 20px;
+            pointer-events: auto;
+        }
+
+        /* Scrollbar styling for controls */
+        #controls-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+        #controls-panel::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        .section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--accent-gold);
+            margin: 16px 0 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .section-title:first-child {
+            margin-top: 0;
+        }
+
+        .control-group {
+            margin-bottom: 14px;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            margin-bottom: 6px;
+        }
+
+        .control-label {
+            color: var(--text-main);
+        }
+
+        .control-val {
+            color: var(--accent-cyan);
+            font-family: monospace;
+            font-size: 0.8rem;
+        }
+
+        /* Custom Sliders */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 5px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.15);
+            outline: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.8);
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        /* Dropdowns & Selects */
+        select {
+            width: 100%;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            color: var(--text-main);
+            font-family: var(--font-stack);
+            font-size: 0.82rem;
+            outline: none;
+            cursor: pointer;
+        }
+
+        select:focus {
+            border-color: var(--accent-cyan);
+        }
+
+        /* Toggle Switch */
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 38px;
+            height: 20px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider-toggle {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.2);
+            transition: .3s;
+            border-radius: 20px;
+        }
+
+        .slider-toggle:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider-toggle {
+            background-color: var(--accent-cyan);
+        }
+
+        input:checked + .slider-toggle:before {
+            transform: translateX(18px);
+        }
+
+        /* Quick Action Floating Controls */
+        #quick-actions {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 25; /* Keep floating actions above scrollable glass panels. */
+        }
+
+        .btn-action {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .btn-action:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            transform: translateY(-2px);
+        }
+
+        /* Fallback Error Overlay */
+        #error-overlay {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 30px;
+            text-align: center;
+            max-width: 450px;
+            z-index: 100;
+        }
+
+        /* Tooltip hint */
+        .hint-text {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+
+
+        /* Observatory extension: speed, environments, planet experiment and timeline */
+        #trail-canvas {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            z-index: 2; pointer-events: none; display: block;
+        }
+        .subtle-copy { color: var(--text-dim); font-size: .68rem; line-height: 1.45; }
+        .speed-readout { display: flex; align-items: baseline; justify-content: space-between; margin: 2px 0 8px; }
+        .speed-readout strong { font-family: monospace; font-size: 1.05rem; color: var(--accent-cyan); }
+        .speed-buttons { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin: 8px 0 10px; }
+        .mini-btn, .mode-btn, .event-marker {
+            border: 1px solid var(--panel-border); background: rgba(255,255,255,.055);
+            color: var(--text-main); border-radius: 6px; padding: 7px 5px; font: 600 .7rem var(--font-stack);
+            cursor: pointer; transition: border-color .18s ease, background .18s ease, transform .18s ease;
+        }
+        .mini-btn:hover, .mode-btn:hover, .event-marker:hover { border-color: var(--accent-cyan); background: rgba(6,182,212,.13); }
+        .mini-btn.active, .mode-btn.active { border-color: var(--accent-cyan); color: var(--accent-cyan); background: rgba(6,182,212,.12); }
+        .button-row { display: flex; gap: 7px; flex-wrap: wrap; }
+        .button-row > button { flex: 1 1 auto; }
+        .planet-launch { width: 100%; border-color: rgba(6,182,212,.55); background: linear-gradient(120deg, rgba(6,182,212,.22), rgba(59,130,246,.18)); padding: 12px 14px; }
+        .control-grid-two { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+        .control-grid-two .control-group { min-width: 0; }
+        #planet-panel {
+            position: absolute; left: 20px; top: 122px; width: 290px; max-height: 42vh; overflow-y: auto;
+            padding: 14px 16px; z-index: 9; display: none; pointer-events: auto;
+        }
+        #planet-panel h2 { font-size: .82rem; text-transform: uppercase; letter-spacing: .08em; color: var(--accent-cyan); margin-bottom: 9px; }
+        .planet-status-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+        #planet-status { color: #6ee7b7; font-size: .72rem; font-weight: 700; text-align: right; }
+        .physics-row { display:flex; justify-content:space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.055); font-size: .7rem; }
+        .physics-row span:first-child { color: var(--text-dim); }
+        .physics-row strong { font-family: monospace; font-size: .69rem; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+        #planet-explanation { margin-top: 10px; padding-top: 8px; color: #cbd5e1; border-top: 1px solid var(--panel-border); font-size: .68rem; line-height: 1.45; }
+        #planet-timeline {
+            position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); width: min(640px, calc(100vw - 720px));
+            min-width: 300px; padding: 12px 15px 10px; z-index: 9; display: none; pointer-events: auto;
+        }
+        .timeline-top { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+        .timeline-title { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--accent-gold); }
+        #timeline-clock { font: .68rem monospace; color:#cbd5e1; text-align:right; }
+        #timeline-slider { width:100%; accent-color:var(--accent-cyan); cursor:pointer; }
+        .timeline-markers { position:relative; display:flex; gap:5px; flex-wrap:wrap; max-height:42px; overflow-y:auto; margin:6px 0 8px; }
+        .event-marker { padding:4px 7px; font-size:.62rem; border-color:rgba(245,158,11,.32); }
+        .timeline-actions { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+        .timeline-actions .mini-btn { padding:6px 8px; }
+        .timeline-actions .mode-btn { flex:1 1 auto; }
+        .timeline-note { margin-top:7px; font-size:.61rem; color:var(--text-dim); line-height:1.35; }
+        #event-toast {
+            position:absolute; left:50%; top:22px; transform:translate(-50%,-8px); z-index:30; max-width:min(560px,calc(100vw - 30px));
+            padding:11px 16px; border:1px solid rgba(6,182,212,.35); border-radius:9px; background:rgba(3,7,18,.88);
+            box-shadow:0 12px 35px rgba(0,0,0,.4); font-size:.76rem; line-height:1.45; opacity:0; pointer-events:none;
+            transition:opacity .25s ease, transform .25s ease; backdrop-filter:blur(12px);
+        }
+        #event-toast.show { opacity:1; transform:translate(-50%,0); }
+        .status-dot { width:6px;height:6px;border-radius:50%;display:inline-block;background:#6ee7b7;box-shadow:0 0 8px currentColor;margin-right:6px; }
+        .section-subtitle { font-size:.66rem; color:var(--text-dim); margin:-4px 0 12px; line-height:1.4; }
+        .control-val { white-space:nowrap; }
+        #controls-panel { scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.22) transparent; }
+        button:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid var(--accent-cyan); outline-offset:2px; }
+        @media (max-width: 1050px) {
+            #planet-timeline { width: min(610px, calc(100vw - 370px)); min-width:280px; bottom:12px; }
+            #planet-panel { width:260px; left:12px; top:110px; }
+            #telemetry-hud { left:12px; bottom:12px; min-width:240px; padding:12px 14px; }
+            #header-hud { left:12px; top:12px; }
+            #controls-panel { right:12px; top:12px; width:320px; max-height:calc(100vh - 24px); padding:16px; }
+            #quick-actions { right:12px; bottom:12px; }
+        }
+        @media (max-width: 760px) {
+            #controls-panel { top:54px; right:10px; left:10px; width:calc(100vw - 20px); max-height:35vh; padding:13px; }
+            #header-hud { top:10px; left:10px; max-width:165px; padding:10px 12px; }
+            #header-hud h1 { font-size:.83rem; }
+            #header-hud p { font-size:.63rem; }
+            #telemetry-hud { left:10px; bottom:10px; min-width:0; width:215px; max-width:calc(100vw - 20px); padding:10px 12px; font-size:.65rem; }
+            .telemetry-row { margin-bottom:4px; }
+            #planet-panel { left:10px; top:calc(35vh + 64px); bottom:auto; width:calc(100vw - 20px); max-height:min(220px, calc(65vh - 269px)); padding:11px 12px; }
+            #planet-timeline { left:10px; transform:none; width:calc(100vw - 20px); min-width:0; bottom:10px; padding:10px 12px; }
+            body.planet-active #telemetry-hud { display:none; }
+            #quick-actions { right:10px; bottom:auto; top:10px; flex-direction:row; gap:4px; }
+            .btn-action { padding:6px 8px; font-size:.62rem; }
+            #event-toast { top:auto; bottom:205px; max-height:60px; overflow:hidden; padding:6px 10px; font-size:.62rem; line-height:1.25; }
+        }
+        @media (max-width: 470px) {
+            #header-hud { max-width:calc(100vw - 20px); left:10px; top:10px; }
+            #header-hud p { display:none; }
+            #controls-panel { top:54px; max-height:35vh; }
+            #planet-panel { top:calc(35vh + 64px); max-height:min(220px, calc(65vh - 269px)); bottom:auto; }
+            #quick-actions { top:10px; }
+            #quick-actions .btn-action { padding:5px 6px; font-size:.58rem; }
+            #telemetry-hud { max-width:calc(100vw - 160px); width:205px; }
+            #telemetry-hud .telemetry-row:nth-child(n+6) { display:none; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- WebGL Canvas Context -->
+    <canvas id="webgl-canvas"></canvas>
+    <canvas id="trail-canvas" aria-hidden="true"></canvas>
+
+    <!-- Header HUD -->
+    <div class="glass-panel" id="header-hud">
+        <h1>Kerr Black Hole</h1>
+        <p>3D Relativistic Raytracer in Curved Spacetime (Schwarzschild & Kerr Metric)</p>
+    </div>
+
+    <!-- Live Physics Telemetry HUD -->
+    <div class="glass-panel" id="telemetry-hud">
+        <div class="telemetry-title">Spacetime Telemetry</div>
+        <div class="telemetry-row"><span class="telemetry-label">FPS / Frame Time:</span><span class="telemetry-value" id="hud-fps">60 FPS (16.6ms)</span></div>
+        <div class="telemetry-row"><span class="telemetry-label">Mass (M):</span><span class="telemetry-value" id="hud-mass">1.00 M☉</span></div>
+        <div class="telemetry-row"><span class="telemetry-label">Spin Parameter (a*):</span><span class="telemetry-value" id="hud-spin">0.900</span></div>
+        <div class="telemetry-row"><span class="telemetry-label">Schwarzschild Radius (Rs):</span><span class="telemetry-value" id="hud-rs">2.000 M</span></div>
+        <div class="telemetry-row"><span class="telemetry-label">Event Horizon (r+):</span><span class="telemetry-value" id="hud-rplus">1.436 M</span></div>
+        <div class="telemetry-row"><span class="telemetry-label">Photon Sphere (r_ph):</span><span class="telemetry-value" id="hud-rph">2.042 M</span></div>
+        <div class="telemetry-row"><span class="telemetry-label">ISCO Radius (r_isco):</span><span class="telemetry-value" id="hud-isco">2.321 M</span></div>
+        <div class="telemetry-row"><span class="telemetry-label">Frame Dragging (Ω_H):</span><span class="telemetry-value" id="hud-drag">0.313 c/M</span></div>
+        <div class="telemetry-row"><span class="telemetry-label">Camera Distance:</span><span class="telemetry-value" id="hud-camdist">18.50 M</span></div>
+    </div>
+
+    <!-- Interactive Controls Panel -->
+    <div class="glass-panel" id="controls-panel">
+        
+        <!-- Presets -->
+        <div class="section-title">Simulation Preset</div>
+        <div class="control-group">
+            <select id="preset-select">
+                <option value="gargantua">Interstellar (Gargantua Gold)</option>
+                <option value="m87">Supermassive M87*</option>
+                <option value="sgta">Sagittarius A*</option>
+                <option value="fastkerr" selected>Extreme Kerr Spin (a* = 0.998)</option>
+                <option value="schwarzschild">Schwarzschild Non-Spinning (a* = 0.0)</option>
+            </select>
+        </div>
+
+        <!-- Spacetime Metrics -->
+        <div class="section-title">Spacetime & Metric Controls</div>
+        
+        <div class="control-group">
+            <div class="control-header">
+                <span class="control-label">Black Hole Mass (M)</span>
+                <span class="control-val" id="val-mass">1.0</span>
+            </div>
+            <input type="range" id="slider-mass" min="0.5" max="3.0" step="0.1" value="1.0">
+        </div>
+
+        <div class="control-group">
+            <div class="control-header">
+                <span class="control-label">Kerr Spin Parameter (a*)</span>
+                <span class="control-val" id="val-spin">0.900</span>
+            </div>
+            <input type="range" id="slider-spin" min="0.0" max="0.998" step="0.002" value="0.900">
+            <div class="hint-text">Frame dragging & ISCO shrink as spin approaches 0.998.</div>
+        </div>
+
+        <div class="toggle-row">
+            <span class="control-label">Gravitational Light Lensing</span>
+            <label class="switch">
+                <input type="checkbox" id="toggle-lensing" checked>
+                <span class="slider-toggle"></span>
+            </label>
+        </div>
+
+        <!-- Accretion Disk Physics -->
+        <div class="section-title">Accretion Disk & Optics</div>
+
+        <div class="toggle-row">
+            <span class="control-label">Relativistic Doppler Beaming</span>
+            <label class="switch">
+                <input type="checkbox" id="toggle-doppler" checked>
+                <span class="slider-toggle"></span>
+            </label>
+        </div>
+        <div class="hint-text" style="margin-top: -8px; margin-bottom: 12px;">Boosts emission by g^4 on approaching disk side.</div>
+
+        <div class="control-group">
+            <div class="control-header">
+                <span class="control-label">Color Palette</span>
+            </div>
+            <select id="palette-select">
+                <option value="0">Gargantua Warm Gold</option>
+                <option value="1" selected>Realistic Thermal Plasma</option>
+                <option value="2">Cyberpunk Violet / Cyan</option>
+                <option value="3">X-Ray High Energy Blue</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <div class="control-header">
+                <span class="control-label">Disk Outer Radius</span>
+                <span class="control-val" id="val-disk-outer">16.0 M</span>
+            </div>
+            <input type="range" id="slider-disk-outer" min="6.0" max="30.0" step="0.5" value="16.0">
+        </div>
+
+        <div class="control-group">
+            <div class="control-header">
+                <span class="control-label">Disk Brightness</span>
+                <span class="control-val" id="val-disk-bright">1.2</span>
+            </div>
+            <input type="range" id="slider-disk-bright" min="0.2" max="3.0" step="0.1" value="1.2">
+        </div>
+
+        <div class="control-group">
+            <div class="control-header">
+                <span class="control-label">Disk Temperature</span>
+                <span class="control-val" id="val-disk-temp">1.0</span>
+            </div>
+            <input type="range" id="slider-disk-temp" min="0.3" max="2.5" step="0.05" value="1.0">
+        </div>
+
+        <div class="control-group">
+            <div class="control-header">
+                <span class="control-label">Disk Density / Opacity</span>
+                <span class="control-val" id="val-disk-density">1.0</span>
+            </div>
+            <input type="range" id="slider-disk-density" min="0.2" max="2.0" step="0.1" value="1.0">
+        </div>
+
+        <!-- Rendering & Camera Settings -->
+        <div class="section-title">Render & Camera</div>
+
+        <div class="control-group">
+            <div class="control-header">
+                <span class="control-label">Background Sky Intensity</span>
+                <span class="control-val" id="val-sky">1.0</span>
+            </div>
+            <input type="range" id="slider-sky" min="0.0" max="2.5" step="0.1" value="1.0">
+        </div>
+
+        <div class="control-group">
+            <div class="control-header">
+                <span class="control-label">Resolution Render Scale</span>
+                <span class="control-val" id="val-scale">1.0x</span>
+            </div>
+            <input type="range" id="slider-scale" min="0.5" max="1.5" step="0.25" value="1.0">
+        </div>
+
+
+        <!-- Simulation clock controls -->
+        <div class="section-title">Simulation Speed</div>
+        <div class="speed-readout"><span class="control-label">Animation & model time</span><strong id="speed-readout">1.00×</strong></div>
+        <div class="control-group">
+            <input type="range" id="slider-speed" min="0.1" max="10" step="0.05" value="1" aria-label="Simulation speed">
+        </div>
+        <div class="speed-buttons" id="speed-presets">
+            <button class="mini-btn" data-speed="0.25">0.25×</button>
+            <button class="mini-btn" data-speed="0.5">0.5×</button>
+            <button class="mini-btn active" data-speed="1">1×</button>
+            <button class="mini-btn" data-speed="2">2×</button>
+            <button class="mini-btn" data-speed="5">5×</button>
+        </div>
+        <div class="button-row">
+            <button class="mini-btn" id="btn-simulation-pause">Pause</button>
+            <button class="mini-btn" id="btn-speed-reset">Reset Speed</button>
+        </div>
+        <p class="section-subtitle" style="margin-top:8px;">The time multiplier controls the disk animation and planet experiment. Camera controls remain at normal sensitivity.</p>
+
+        <!-- Background environment controls -->
+        <div class="section-title">Space Environment</div>
+        <div class="control-group">
+            <select id="environment-select" aria-label="Space environment">
+                <option value="0">Empty Space</option>
+                <option value="1">Starfield</option>
+                <option value="2">Milky Way</option>
+                <option value="3">Colorful Nebula</option>
+                <option value="4">Deep Galaxy</option>
+                <option value="5">Cosmic Dust</option>
+                <option value="6">Interstellar Cinematic</option>
+                <option value="7" selected>Original Sky</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <div class="control-header"><span class="control-label">Background Brightness</span><span class="control-val" id="val-bg-brightness">1.0</span></div>
+            <input type="range" id="slider-bg-brightness" min="0" max="2.5" step="0.05" value="1">
+        </div>
+
+        <!-- Planet experiment controls -->
+        <div class="section-title">Planet Experiment <span style="color:var(--text-dim);font-size:.62rem;font-weight:400;">NEWTONIAN ORBIT</span></div>
+        <button class="btn-action planet-launch" id="btn-launch-planet">✦ Launch Planet Simulation</button>
+        <p class="section-subtitle" style="margin-top:8px;">Planet motion uses a Newtonian point-mass model. The Kerr raytracer still controls the black-hole image; orbital frame-dragging is not solved.</p>
+        <div class="control-group">
+            <div class="control-header"><span class="control-label">Planet Type</span></div>
+            <select id="planet-type">
+                <option value="earth" selected>Earth-like (ocean / land / clouds)</option>
+                <option value="mars">Rocky planet</option>
+                <option value="jupiter">Gas giant</option>
+                <option value="ice">Icy world</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <div class="control-header"><span class="control-label">Physical Black Hole Mass</span><span class="control-val" id="val-physical-bh">10⁷ M☉</span></div>
+            <input type="range" id="slider-physical-bh" min="4" max="9" step="1" value="7">
+            <div class="hint-text">Logarithmic scale: 10⁴–10⁹ solar masses. Independent of the original render-mass control.</div>
+        </div>
+        <div class="control-group">
+            <div class="control-header"><span class="control-label">Starting Distance</span><span class="control-val" id="val-planet-distance">16 M</span></div>
+            <input type="range" id="slider-planet-distance" min="4" max="50" step="0.5" value="16">
+        </div>
+        <div class="control-group">
+            <div class="control-header"><span class="control-label">Tangential Speed / Circular</span><span class="control-val" id="val-planet-tangent">0.65×</span></div>
+            <input type="range" id="slider-planet-tangent" min="0" max="1.5" step="0.05" value="0.65">
+        </div>
+        <div class="control-group">
+            <div class="control-header"><span class="control-label">Inward / Outward Speed</span><span class="control-val" id="val-planet-radial">−0.15×</span></div>
+            <input type="range" id="slider-planet-radial" min="-0.8" max="0.8" step="0.05" value="-0.15">
+        </div>
+        <div class="control-grid-two">
+            <div class="control-group">
+                <div class="control-header"><span class="control-label">Planet Radius</span><span class="control-val" id="val-planet-radius">1.0×</span></div>
+                <input type="range" id="slider-planet-radius" min="0.5" max="2" step="0.1" value="1">
+            </div>
+            <div class="control-group">
+                <div class="control-header"><span class="control-label">Planet Mass</span><span class="control-val" id="val-planet-mass">1.0×</span></div>
+                <input type="range" id="slider-planet-mass" min="0.2" max="5" step="0.1" value="1">
+            </div>
+        </div>
+        <div class="toggle-row">
+            <span class="control-label">Enhanced planet visibility</span>
+            <label class="switch"><input type="checkbox" id="toggle-planet-enhanced" checked><span class="slider-toggle"></span></label>
+        </div>
+        <p class="section-subtitle">Enhanced visibility enlarges the rendered planet only; its mass, physical radius and tidal estimate retain their configured values.</p>
+
+    </div>
+
+    <!-- Quick Action Buttons -->
+    <div id="quick-actions">
+        <button class="btn-action" id="btn-reset-cam">Reset View</button>
+        <button class="btn-action" id="btn-toggle-ui">Hide Interface</button>
+    </div>
+
+
+    <div class="glass-panel" id="planet-panel" aria-live="polite">
+        <div class="planet-status-line"><h2>Planet telemetry</h2><span id="planet-status"><span class="status-dot"></span>Approaching</span></div>
+        <div class="physics-row"><span>Distance from centre</span><strong id="planet-distance-now">—</strong></div>
+        <div class="physics-row"><span>Velocity</span><strong id="planet-velocity-now">—</strong></div>
+        <div class="physics-row"><span>Radial velocity</span><strong id="planet-radial-now">—</strong></div>
+        <div class="physics-row"><span>Simulation time</span><strong id="planet-time-now">0 M</strong></div>
+        <div class="physics-row"><span>Closest approach</span><strong id="planet-closest-now">—</strong></div>
+        <div class="physics-row"><span>Tidal acceleration</span><strong id="planet-tidal-now">—</strong></div>
+        <div class="physics-row"><span>Event horizon</span><strong id="planet-horizon-now">—</strong></div>
+        <div class="physics-row"><span>Tidal radius estimate</span><strong id="planet-tidal-radius-now">—</strong></div>
+        <div id="planet-explanation">The planet follows a Newtonian trajectory. Tidal deformation and debris are visual approximations, not a fluid or full general-relativistic simulation.</div>
+        <div class="button-row" style="margin-top:12px;">
+            <button class="mini-btn" id="btn-planet-pause">Pause</button>
+            <button class="mini-btn" id="btn-planet-restart">Restart</button>
+            <button class="mini-btn" id="btn-planet-remove">Remove Planet</button>
+        </div>
+        <div class="button-row" style="margin-top:6px;">
+            <button class="mini-btn" id="btn-black-hole-only">Return to Black Hole View</button>
+        </div>
+    </div>
+
+    <div class="glass-panel" id="planet-timeline" aria-label="Planet experiment timeline">
+        <div class="timeline-top"><span class="timeline-title">Experiment Timeline</span><span id="timeline-clock">0.00 M · 0.0 s equivalent</span></div>
+        <input id="timeline-slider" type="range" min="0" max="1000" step="1" value="1000" aria-label="Scrub simulation history">
+        <div class="timeline-markers" id="timeline-markers"></div>
+        <div class="timeline-actions">
+            <button class="mini-btn" id="btn-timeline-back" title="Step back">◀</button>
+            <button class="mini-btn" id="btn-timeline-play" title="Play or pause">Ⅱ</button>
+            <button class="mini-btn" id="btn-timeline-forward" title="Step forward">▶</button>
+            <button class="mini-btn" id="btn-timeline-replay" title="Replay from start">↺ Replay</button>
+            <button class="mode-btn active" data-mode="live" id="mode-live">Live</button>
+            <button class="mode-btn" data-mode="timeline" id="mode-timeline">Timeline</button>
+            <button class="mode-btn" data-mode="replay" id="mode-replay">Replay</button>
+        </div>
+        <div class="timeline-note">Scrubbing restores recorded position, velocity, rotation, deformation, debris and event state. Time is shown in geometric units M with its physical equivalent; playback is time-compressed for viewing.</div>
+    </div>
+    <div id="event-toast" role="status" aria-live="polite"></div>
+
+    <!-- Error Fallback Box -->
+    <div class="glass-panel" id="error-overlay">
+        <h2 style="color: #ef4444; margin-bottom: 10px;">WebGL2 Not Supported</h2>
+        <p style="font-size: 0.85rem; color: var(--text-dim);">Your browser or hardware graphics driver does not support WebGL2. Please update your web browser or enable WebGL2 in hardware settings to view the relativistic black hole raytracer.</p>
+    </div>
+
+    <!-- WebGL Shaders & Engine Script -->
+    <script>
+
+        // Vertex Shader Code
+        const VERTEX_SHADER_SOURCE = `#version 300 es
+        in vec2 a_position;
+        void main() {
+            gl_Position = vec4(a_position, 0.0, 1.0);
+        }`;
+
+        // Fragment Shader Code - Relativistic Curved Spacetime Raytracer
+        const FRAGMENT_SHADER_SOURCE = `#version 300 es
+        precision highp float;
+
+        out vec4 fragColor;
+
+        uniform vec2 u_resolution;
+        uniform vec3 u_camPos;
+        uniform vec3 u_camTarget;
+        uniform vec3 u_camUp;
+        uniform float u_time;
+
+        // Physics parameters
+        uniform float u_mass;
+        uniform float u_spin;
+        uniform float u_diskOuter;
+        uniform float u_diskBrightness;
+        uniform float u_diskTemp;
+        uniform float u_diskDensity;
+        uniform int u_enableLensing;
+        uniform int u_enableDoppler;
+        uniform int u_palette;
+        uniform float u_skyIntensity;
+        uniform float u_bgBrightness;
+        uniform int u_environmentFrom;
+        uniform int u_environmentTo;
+        uniform float u_environmentBlend;
+        uniform int u_planetEnabled;
+        uniform vec3 u_planetPos;
+        uniform float u_planetRadius;
+        uniform float u_planetRotation;
+        uniform float u_planetTidal;
+        uniform int u_planetType;
+
+        const float PI = 3.14159265359;
+        const int MAX_STEPS = 160;
+
+        // Simplex Noise 2D functions for procedural plasma accretion disk
+        vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
+
+        float snoise(vec2 v) {
+            const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                                -0.577350269189626, 0.024390243902439);
+            vec2 i  = floor(v + dot(v, C.yy) );
+            vec2 x0 = v -   i + dot(i, C.xx);
+            vec2 i1;
+            i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+            vec4 x12 = x0.xyxy + C.xxzz;
+            x12.xy -= i1;
+            i = mod289(i);
+            vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+                + i.x + vec3(0.0, i1.x, 1.0 ));
+            vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+            m = m*m;
+            m = m*m;
+            vec3 x = 2.0 * fract(p * C.www) - 1.0;
+            vec3 h = abs(x) - 0.5;
+            vec3 ox = floor(x + 0.5);
+            vec3 a0 = x - ox;
+            m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+            vec3 g;
+            g.x  = a0.x  * x0.x  + h.x  * x0.y;
+            g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+            return 130.0 * dot(m, g);
+        }
+
+        float fbm(vec2 p) {
+            float val = 0.0;
+            float amp = 0.5;
+            float freq = 1.0;
+            for(int i = 0; i < 4; i++) {
+                val += amp * snoise(p * freq);
+                freq *= 2.02;
+                amp *= 0.5;
+            }
+            return val;
+        }
+
+        // Color Palettes mapping temperature/energy to color
+        vec3 getTemperatureColor(float t, int palette) {
+            t = clamp(t, 0.0, 3.2);
+            
+            if (palette == 0) { // Gargantua Gold
+                vec3 c1 = vec3(0.08, 0.01, 0.001);
+                vec3 c2 = vec3(1.0, 0.42, 0.05);
+                vec3 c3 = vec3(1.0, 0.85, 0.35);
+                vec3 c4 = vec3(1.0, 0.98, 0.92);
+                if (t < 0.3) return mix(c1, c2, t/0.3);
+                if (t < 0.8) return mix(c2, c3, (t-0.3)/0.5);
+                return mix(c3, c4, clamp((t-0.8)/1.2, 0.0, 1.0));
+            } else if (palette == 1) { // Realistic Blackbody Plasma
+                vec3 c1 = vec3(0.12, 0.01, 0.005);
+                vec3 c2 = vec3(0.95, 0.22, 0.02);
+                vec3 c3 = vec3(1.0, 0.72, 0.12);
+                vec3 c4 = vec3(0.75, 0.88, 1.0);
+                if (t < 0.35) return mix(c1, c2, t/0.35);
+                if (t < 0.75) return mix(c2, c3, (t-0.35)/0.4);
+                return mix(c3, c4, clamp((t-0.75)/1.0, 0.0, 1.0));
+            } else if (palette == 2) { // Cyberpunk Violet
+                vec3 c1 = vec3(0.04, 0.0, 0.12);
+                vec3 c2 = vec3(0.65, 0.05, 0.82);
+                vec3 c3 = vec3(0.05, 0.75, 0.98);
+                vec3 c4 = vec3(0.92, 0.96, 1.0);
+                if (t < 0.3) return mix(c1, c2, t/0.3);
+                if (t < 0.8) return mix(c2, c3, (t-0.3)/0.5);
+                return mix(c3, c4, clamp((t-0.8)/1.2, 0.0, 1.0));
+            } else { // X-Ray High Energy Blue
+                vec3 c1 = vec3(0.01, 0.02, 0.08);
+                vec3 c2 = vec3(0.1, 0.35, 0.92);
+                vec3 c3 = vec3(0.35, 0.82, 1.0);
+                vec3 c4 = vec3(1.0, 1.0, 1.0);
+                if (t < 0.3) return mix(c1, c2, t/0.3);
+                if (t < 0.8) return mix(c2, c3, (t-0.3)/0.5);
+                return mix(c3, c4, clamp((t-0.8)/1.2, 0.0, 1.0));
+            }
+        }
+
+        // Original procedural sky retained as environment 7.
+        vec3 getOriginalSkyColor(vec3 rayDir) {
+            vec3 dir = normalize(rayDir);
+            vec3 starCoord = dir * 160.0;
+            vec3 id = floor(starCoord);
+            vec3 fd = fract(starCoord) - 0.5;
+            float h = fract(sin(dot(id, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+            float star = 0.0;
+            if (h > 0.955) {
+                float dist = length(fd);
+                star = smoothstep(0.2, 0.0, dist) * (0.6 + 0.4 * sin(h * 100.0 + u_time * 0.5));
+            }
+            float galLat = abs(dir.y);
+            float galPlane = exp(-galLat * 5.0);
+            vec2 nebPos = vec2(atan(dir.z, dir.x), dir.y) * 1.8;
+            float n1 = fbm(nebPos + vec2(0.5, 0.2));
+            float n2 = fbm(nebPos * 2.2 - vec2(n1, u_time * 0.005));
+            vec3 nebColor1 = vec3(0.12, 0.04, 0.22);
+            vec3 nebColor2 = vec3(0.02, 0.1, 0.22);
+            vec3 nebula = mix(nebColor1, nebColor2, n2) * (galPlane * 1.8 + 0.15) * (0.5 + 0.5 * n1);
+            return vec3(star) + nebula * 0.75;
+        }
+
+        float hash31(vec3 p) {
+            return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453123);
+        }
+
+        vec3 starLayer(vec3 dir, float frequency, float threshold, float sizeScale) {
+            vec3 g = dir * frequency;
+            vec3 cell = floor(g);
+            vec3 localPos = fract(g) - 0.5;
+            float seed = hash31(cell);
+            vec3 offset = vec3(hash31(cell + vec3(13.1)), hash31(cell + vec3(27.7)), hash31(cell + vec3(43.3))) - 0.5;
+            float radius = mix(0.012, 0.075, hash31(cell + vec3(5.4))) * sizeScale;
+            float d = length(localPos - offset * 0.64);
+            float core = 1.0 - smoothstep(radius * 0.22, radius, d);
+            float visibility = smoothstep(threshold, min(0.99999, threshold + 0.025), seed);
+            float twinkle = 0.86 + 0.14 * sin(u_time * (0.35 + seed) + seed * 91.0);
+            float colorSeed = hash31(cell + vec3(91.7));
+            vec3 starColor = mix(vec3(0.58, 0.72, 1.0), vec3(1.0, 0.72, 0.49), colorSeed);
+            starColor = mix(starColor, vec3(0.75, 1.0, 0.96), smoothstep(0.75, 1.0, colorSeed));
+            return starColor * (core * visibility * twinkle * (0.45 + 1.4 * hash31(cell + vec3(2.3))));
+        }
+
+        vec3 nebulaField(vec3 dir, float scale, vec3 c1, vec3 c2, float bandStrength, float drift) {
+            vec2 q = vec2(atan(dir.z, dir.x), asin(clamp(dir.y, -1.0, 1.0)));
+            float n1 = fbm(q * scale + vec2(drift, 0.4));
+            float n2 = fbm(q * scale * 2.1 - vec2(n1 * 1.4, drift * 0.6));
+            float band = exp(-abs(dir.y + 0.13 * sin(q.x * 2.0 + n1)) * bandStrength);
+            float cloud = clamp((n1 * 0.72 + n2 * 0.34 + 0.28), 0.0, 1.0);
+            return mix(c1, c2, clamp(n2 * 0.65 + 0.45, 0.0, 1.0)) * cloud * (0.2 + band * bandStrength * 0.11);
+        }
+
+        vec3 getSkyEnvironment(vec3 rayDir, int environment) {
+            vec3 d = normalize(rayDir);
+            if (environment == 7) return getOriginalSkyColor(d);
+            vec3 stars = starLayer(d, 170.0, 0.967, 0.8) + starLayer(d, 310.0, 0.979, 0.55);
+            vec2 q = vec2(atan(d.z, d.x), asin(clamp(d.y, -1.0, 1.0)));
+            float galacticBand = exp(-abs(d.y + 0.1 * sin(q.x * 1.7)) * 9.0);
+            float bandNoise = clamp(0.45 + 0.35 * fbm(q * 3.0) + 0.2 * fbm(q * 7.0), 0.0, 1.0);
+            if (environment == 0) {
+                return vec3(0.0002) + starLayer(d, 125.0, 0.9988, 0.25) * 0.12;
+            } else if (environment == 1) {
+                return stars * 1.4 + starLayer(d, 430.0, 0.985, 0.7) * 0.45;
+            } else if (environment == 2) {
+                vec3 band = nebulaField(d, 2.2, vec3(0.12, 0.08, 0.24), vec3(0.5, 0.34, 0.2), 5.3, u_time * 0.001);
+                band += vec3(0.08, 0.13, 0.25) * galacticBand * bandNoise * 0.55;
+                return stars * 1.55 + band + starLayer(d, 470.0, 0.989, 0.65) * 0.4;
+            } else if (environment == 3) {
+                vec3 clouds = nebulaField(d, 2.0, vec3(0.14, 0.015, 0.38), vec3(0.015, 0.36, 0.67), 2.6, u_time * 0.003);
+                clouds += nebulaField(d, 4.4, vec3(0.28, 0.02, 0.25), vec3(0.08, 0.04, 0.3), 1.4, -u_time * 0.002) * 0.8;
+                return stars * 1.2 + clouds * 1.9;
+            } else if (environment == 4) {
+                vec3 galaxies = nebulaField(d, 7.5, vec3(0.035, 0.025, 0.11), vec3(0.2, 0.24, 0.46), 1.2, 0.0) * 0.85;
+                float distantGlow = pow(max(0.0, fbm(q * 13.0)), 3.0) * 0.22;
+                return stars * 1.15 + galaxies + vec3(0.35, 0.38, 0.72) * distantGlow;
+            } else if (environment == 5) {
+                vec3 dust = nebulaField(d, 2.8, vec3(0.06, 0.035, 0.09), vec3(0.28, 0.17, 0.09), 7.0, u_time * 0.0005);
+                return stars * 0.45 + dust * 0.55;
+            } else if (environment == 6) {
+                vec3 cloudA = nebulaField(d, 2.6, vec3(0.16, 0.035, 0.24), vec3(0.04, 0.27, 0.44), 4.4, u_time * 0.0015);
+                vec3 cloudB = nebulaField(d, 5.3, vec3(0.25, 0.08, 0.36), vec3(0.08, 0.22, 0.46), 2.0, -u_time * 0.001) * 0.7;
+                vec3 brightStars = starLayer(d, 390.0, 0.984, 1.1) + starLayer(d, 650.0, 0.992, 0.8);
+                return stars * 1.4 + brightStars * 0.75 + cloudA * 1.5 + cloudB;
+            }
+            return getOriginalSkyColor(d);
+        }
+
+        vec3 getBlendedSkyColor(vec3 rayDir) {
+            vec3 sky;
+            if (u_environmentBlend >= 0.999) {
+                sky = getSkyEnvironment(rayDir, u_environmentTo);
+            } else {
+                vec3 a = getSkyEnvironment(rayDir, u_environmentFrom);
+                vec3 b = getSkyEnvironment(rayDir, u_environmentTo);
+                sky = mix(a, b, clamp(u_environmentBlend, 0.0, 1.0));
+            }
+            return sky * u_skyIntensity * u_bgBrightness;
+        }
+
+        // Procedurally shaded ellipsoid intersected by each bent ray segment: actual 3D geometry, not a screen-space sprite.
+        vec3 planetSurfaceColor(vec3 normal, float rotation, int planetType, float tidal) {
+            vec3 n = normalize(normal);
+            vec2 uv = vec2(atan(n.z, n.x) + rotation, asin(clamp(n.y, -1.0, 1.0)));
+            float broad = fbm(uv * vec2(2.8, 5.2));
+            float details = fbm(uv * vec2(15.0, 23.0));
+            float fine = fbm(uv * vec2(42.0, 56.0));
+            vec3 base;
+            if (planetType == 0) {
+                float land = smoothstep(-0.10, 0.22, broad + details * 0.16);
+                vec3 ocean = mix(vec3(0.012, 0.075, 0.29), vec3(0.025, 0.27, 0.62), clamp(0.45 + details * 0.35, 0.0, 1.0));
+                vec3 continent = mix(vec3(0.12, 0.28, 0.08), vec3(0.53, 0.39, 0.20), clamp(0.42 + fine * 0.7, 0.0, 1.0));
+                float polarIce = smoothstep(0.82, 0.98, abs(n.y));
+                base = mix(ocean, continent, land);
+                base = mix(base, vec3(0.72, 0.85, 0.92), polarIce * 0.82);
+                float cloud = smoothstep(0.16, 0.38, fbm(uv * vec2(31.0, 47.0) + vec2(rotation * 0.14, 0.0)));
+                base = mix(base, vec3(0.78, 0.86, 0.95), cloud * 0.46);
+            } else if (planetType == 1) {
+                float ridge = clamp(0.48 + broad * 0.45 + details * 0.28, 0.0, 1.0);
+                base = mix(vec3(0.18, 0.055, 0.025), vec3(0.82, 0.31, 0.12), ridge);
+                base += fine * 0.07;
+            } else if (planetType == 2) {
+                float bands = sin(uv.y * 42.0 + broad * 6.0 + details * 3.0);
+                base = mix(vec3(0.48, 0.25, 0.15), vec3(0.91, 0.69, 0.43), smoothstep(-0.35, 0.4, bands + details * 0.45));
+                base = mix(base, vec3(0.8, 0.42, 0.29), smoothstep(0.55, 0.8, fbm(uv * vec2(7.0, 13.0))) * 0.65);
+            } else {
+                float ice = clamp(0.68 + broad * 0.25 + details * 0.12, 0.0, 1.0);
+                base = mix(vec3(0.12, 0.25, 0.38), vec3(0.64, 0.83, 0.92), ice);
+                base = mix(base, vec3(0.91, 0.96, 1.0), smoothstep(0.7, 0.95, abs(n.y)) * 0.55);
+            }
+            vec3 lightDir = normalize(vec3(-0.42, 0.62, 0.66) + normalize(-u_planetPos) * 0.22);
+            float diffuse = max(dot(n, lightDir), 0.0);
+            float ambient = 0.035 + 0.11 * max(n.y, 0.0);
+            vec3 viewDir = normalize(u_camPos - u_planetPos);
+            vec3 halfVec = normalize(lightDir + viewDir);
+            float specular = pow(max(dot(n, halfVec), 0.0), planetType == 0 ? 38.0 : 18.0) * (planetType == 0 ? 0.42 : 0.12);
+            vec3 shaded = base * (ambient + diffuse * 1.05) + vec3(specular);
+            float rim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
+            shaded += rim * vec3(0.08, 0.28, 0.55) * 0.55;
+            if (tidal > 0.42) {
+                float heat = smoothstep(0.42, 0.95, tidal);
+                shaded = mix(shaded, shaded * vec3(1.35, 0.52, 0.18) + vec3(0.2, 0.025, 0.004), heat * 0.68);
+            }
+            return shaded;
+        }
+
+        // Exact ISCO Radius in Kerr Spacetime
+        float calculateISCO(float a) {
+            float z1 = 1.0 + pow(1.0 - a * a, 1.0/3.0) * (pow(1.0 + a, 1.0/3.0) + pow(1.0 - a, 1.0/3.0));
+            float z2 = sqrt(3.0 * a * a + z1 * z1);
+            float r_isco = 3.0 + z2 - sqrt(max(0.0, (3.0 - z1) * (3.0 + z1 + 2.0 * z2)));
+            return r_isco;
+        }
+
+        void main() {
+            vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / u_resolution.y;
+            
+            // Setup Camera Vectors
+            vec3 ww = normalize(u_camTarget - u_camPos);
+            vec3 uu = normalize(cross(ww, u_camUp));
+            vec3 vv = cross(uu, ww);
+            
+            vec3 rayDir = normalize(uv.x * uu + uv.y * vv + 1.4 * ww);
+            vec3 rayPos = u_camPos;
+            
+            // Physics Metric Setup
+            float M = u_mass;
+            float a_spin = u_spin;
+            float Rs = 2.0 * M;
+            
+            // Kerr Event Horizon Radius
+            float r_horizon = M * (1.0 + sqrt(max(0.0001, 1.0 - a_spin * a_spin)));
+            
+            // Accretion Disk Boundaries
+            float r_isco = calculateISCO(a_spin) * M;
+            float r_disk_in = max(r_horizon * 1.01, r_isco);
+            float r_disk_out = u_diskOuter * M;
+            
+            vec3 accumulatedColor = vec3(0.0);
+            float transmittance = 1.0;
+            
+            vec3 p = rayPos;
+            vec3 v = rayDir;
+            
+            bool hitHorizon = false;
+            float frameDragCoeff = 2.0 * M * a_spin;
+            
+            // Spacetime Light Ray Marching Integration Loop
+            for (int i = 0; i < MAX_STEPS; i++) {
+                float r = length(p);
+                
+                // 1. Event Horizon Intersection
+                if (r <= r_horizon) {
+                    hitHorizon = true;
+                    break;
+                }
+                
+                // 2. Escape Boundary
+                if (r > 60.0 * M && dot(p, v) > 0.0) {
+                    break;
+                }
+                
+                // Adaptive step size based on metric curvature
+                float stepSize = clamp(0.04 * r, 0.015, 0.85);
+                
+                // 3. Gravitational Light Deflection (Schwarzschild & Kerr Metric)
+                if (u_enableLensing == 1) {
+                    vec3 L = cross(p, v);
+                    float L2 = dot(L, L);
+                    
+                    // Schwarzschild Effective Radial Deflection
+                    vec3 accel = - (1.5 * Rs / (pow(r, 5.0))) * L2 * p;
+                    
+                    // Kerr Frame Dragging Vector Force around Y-axis
+                    if (abs(a_spin) > 0.001) {
+                        vec3 spinAxis = vec3(0.0, 1.0, 0.0);
+                        vec3 dragVel = cross(spinAxis, p) * (frameDragCoeff / (pow(r, 3.0) + 0.1));
+                        accel += dragVel * 0.45;
+                    }
+                    
+                    // Update Ray Velocity & Renormalize photon momentum
+                    v += accel * stepSize;
+                    v = normalize(v);
+                }
+                
+                vec3 nextP = p + v * stepSize;
+
+                // Planet surface: intersect the current curved ray segment with a 3D ellipsoid.
+                // Its long axis is radial to the black hole; tidal stretch is intentionally visual-only.
+                if (u_planetEnabled == 1) {
+                    vec3 axis = normalize(u_planetPos);
+                    vec3 rel = p - u_planetPos;
+                    float stretch = 1.0 + 0.72 * clamp(u_planetTidal, 0.0, 1.0);
+                    float axial = dot(rel, axis);
+                    float axialV = dot(v, axis);
+                    vec3 perp = rel - axial * axis;
+                    vec3 perpV = v - axialV * axis;
+                    float rr = max(u_planetRadius * u_planetRadius, 0.000001);
+                    float invStretch2 = 1.0 / (stretch * stretch);
+                    float qa = dot(perpV, perpV) / rr + axialV * axialV * invStretch2 / rr;
+                    float qb = 2.0 * (dot(perp, perpV) / rr + axial * axialV * invStretch2 / rr);
+                    float qc = dot(perp, perp) / rr + axial * axial * invStretch2 / rr - 1.0;
+                    float discPlanet = qb * qb - 4.0 * qa * qc;
+                    if (discPlanet >= 0.0 && qa > 0.000001) {
+                        float tHit = (-qb - sqrt(discPlanet)) / (2.0 * qa);
+                        if (tHit < 0.0) tHit = (-qb + sqrt(discPlanet)) / (2.0 * qa);
+                        if (tHit >= 0.0 && tHit <= stepSize) {
+                            vec3 planetHit = p + v * tHit;
+                            vec3 hitRel = planetHit - u_planetPos;
+                            float hitAxial = dot(hitRel, axis);
+                            vec3 hitPerp = hitRel - hitAxial * axis;
+                            vec3 planetNormal = normalize(hitPerp + axis * hitAxial * invStretch2);
+                            vec3 surface = planetSurfaceColor(planetNormal, u_planetRotation, u_planetType, u_planetTidal);
+                            accumulatedColor += transmittance * surface;
+                            transmittance = 0.0;
+                            break;
+                        }
+                    }
+                }
+                
+                // 4. Accretion Disk Crossing Check (Equatorial Plane y = 0)
+                if ((p.y * nextP.y) < 0.0) {
+                    float t_plane = -p.y / (nextP.y - p.y);
+                    vec3 hitP = p + t_plane * (nextP - p);
+                    float r_hit = length(hitP);
+                    
+                    if (r_hit >= r_disk_in && r_hit <= r_disk_out) {
+                        float phi = atan(hitP.z, hitP.x);
+                        
+                        // Differential Keplerian Rotation Profile
+                        float omega = sqrt(M) / (pow(r_hit, 1.5) + a_spin * M);
+                        float diskTime = u_time * omega * 2.5;
+                        
+                        // Multi-octave Volumetric Plasma Turbulence
+                        vec2 noiseUV = vec2(r_hit * 0.7, phi * 3.0 + diskTime);
+                        float plasma = fbm(noiseUV);
+                        float detail = fbm(noiseUV * 2.8 - vec2(diskTime * 1.5, 0.0));
+                        
+                        // Novikov-Thorne Temperature Flux Profile
+                        float normR = r_hit / r_disk_in;
+                        float tempProfile = pow(normR, -0.75) * pow(max(0.0, 1.0 - sqrt(1.0 / normR)), 0.25);
+                        tempProfile = max(0.05, tempProfile * 2.2);
+                        
+                        // Relativistic Doppler Factor g = sqrt(1 - 2M/r) / (1 - v * cos(theta))
+                        float g = 1.0;
+                        if (u_enableDoppler == 1) {
+                            vec3 v_disk_dir = normalize(cross(vec3(0.0, 1.0, 0.0), hitP));
+                            float v_mag = clamp(sqrt(M / r_hit), 0.0, 0.72);
+                            
+                            float cos_theta = dot(-v, v_disk_dir);
+                            float gamma = 1.0 / sqrt(max(0.01, 1.0 - v_mag * v_mag));
+                            g = 1.0 / (gamma * (1.0 - v_mag * cos_theta));
+                            g = clamp(g, 0.2, 3.8);
+                        }
+                        
+                        float effectiveTemp = tempProfile * u_diskTemp * g;
+                        vec3 diskColor = getTemperatureColor(effectiveTemp, u_palette);
+                        
+                        // Relativistic Beaming Intensity Factor g^3.8
+                        float beaming = (u_enableDoppler == 1) ? pow(g, 3.8) : 1.0;
+                        
+                        // Density & Alpha Opacity
+                        float density = (0.35 + 0.65 * plasma) * (0.7 + 0.3 * detail);
+                        float edgeFadeIn = smoothstep(r_disk_in, r_disk_in * 1.15, r_hit);
+                        float edgeFadeOut = smoothstep(r_disk_out, r_disk_out * 0.7, r_hit);
+                        float diskAlpha = density * edgeFadeIn * edgeFadeOut * u_diskDensity * 0.8;
+                        
+                        // Accumulate Volumetric Emission
+                        vec3 emission = diskColor * beaming * u_diskBrightness * (1.1 + 0.9 * plasma);
+                        accumulatedColor += transmittance * emission * diskAlpha;
+                        transmittance *= (1.0 - diskAlpha);
+                        
+                        if (transmittance < 0.01) break;
+                    }
+                }
+                
+                p = nextP;
+            }
+            
+            // 5. Escaped Light Ray Celestial Sky Sampling
+            if (!hitHorizon && transmittance > 0.01) {
+                vec3 skyColor = getBlendedSkyColor(v);
+                accumulatedColor += transmittance * skyColor;
+            }
+            
+            // Filmic ACES Tone Mapping
+            vec3 finalColor = accumulatedColor;
+            finalColor = (finalColor * (2.51 * finalColor + 0.03)) / (finalColor * (2.43 * finalColor + 0.59) + 0.14);
+            
+            // Gamma Correction
+            finalColor = pow(clamp(finalColor, 0.0, 1.0), vec3(1.0 / 2.2));
+            
+            fragColor = vec4(finalColor, 1.0);
+        }`;
+
+
+        // Simulation Parameters & State
+        const state = {
+            mass: 1.0,
+            spin: 0.900,
+            diskOuter: 16.0,
+            diskBrightness: 1.2,
+            diskTemp: 1.0,
+            diskDensity: 1.0,
+            enableLensing: true,
+            enableDoppler: true,
+            palette: 1,
+            skyIntensity: 1.0,
+            renderScale: 1.0,
+            time: 0.0,
+            simulationTime: 0.0,
+            lastFrameTimestamp: null,
+            speedMultiplier: 1.0,
+            paused: false,
+            environmentFrom: 7,
+            environmentTo: 7,
+            environmentBlend: 1.0,
+            backgroundBrightness: 1.0,
+            pixelRatio: 1.0,
+            
+            // Camera Orbit State
+            camYaw: 0.2,
+            camPitch: 0.25,
+            camDist: 18.5,
+            targetDist: 18.5,
+            camTarget: [0, 0, 0],
+            
+            // Drag interaction
+            isDragging: false,
+            isPanning: false,
+            lastMouseX: 0,
+            lastMouseY: 0
+        };
+
+        // DOM Element Cache
+        const canvas = document.getElementById('webgl-canvas');
+        let gl = null;
+        let shaderProgram = null;
+        let uniforms = {};
+
+        // FPS & Performance tracking
+        let frameCount = 0;
+        let lastFpsUpdate = performance.now();
+        let fps = 60;
+
+
+        function initWebGL() {
+            gl = canvas.getContext('webgl2', { antialias: true, powerPreference: 'high-performance' });
+            if (!gl) {
+                document.getElementById('error-overlay').style.display = 'block';
+                return false;
+            }
+
+            // Create Vertex Shader
+            const vertShader = gl.createShader(gl.VERTEX_SHADER);
+            gl.shaderSource(vertShader, VERTEX_SHADER_SOURCE);
+            gl.compileShader(vertShader);
+            if (!gl.getShaderParameter(vertShader, gl.COMPILE_STATUS)) {
+                console.error('Vertex Shader Error:', gl.getShaderInfoLog(vertShader));
+                return false;
+            }
+
+            // Create Fragment Shader
+            const fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(fragShader, FRAGMENT_SHADER_SOURCE);
+            gl.compileShader(fragShader);
+            if (!gl.getShaderParameter(fragShader, gl.COMPILE_STATUS)) {
+                console.error('Fragment Shader Error:', gl.getShaderInfoLog(fragShader));
+                const overlay = document.getElementById('error-overlay');
+                overlay.style.display = 'block';
+                overlay.querySelector('h2').textContent = 'Shader Compilation Error';
+                overlay.querySelector('p').textContent = 'The graphics driver could not compile the simulation shader. Open the browser console for the precise GLSL error; try lowering render scale or updating the graphics driver.';
+                return false;
+            }
+
+            // Link Program
+            shaderProgram = gl.createProgram();
+            gl.attachShader(shaderProgram, vertShader);
+            gl.attachShader(shaderProgram, fragShader);
+            gl.linkProgram(shaderProgram);
+            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+                console.error('Program Link Error:', gl.getProgramInfoLog(shaderProgram));
+                const overlay = document.getElementById('error-overlay');
+                overlay.style.display = 'block';
+                overlay.querySelector('h2').textContent = 'Shader Link Error';
+                overlay.querySelector('p').textContent = 'The graphics driver could not link the simulation shader program. Open the browser console for details.';
+                return false;
+            }
+
+            gl.useProgram(shaderProgram);
+
+            // Quad Geometry (Fullscreen Triangle Strip / Quad)
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                -1.0, -1.0,
+                 1.0, -1.0,
+                -1.0,  1.0,
+                 1.0,  1.0
+            ]), gl.STATIC_DRAW);
+
+            const posLoc = gl.getAttribLocation(shaderProgram, 'a_position');
+            gl.enableVertexAttribArray(posLoc);
+            gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+            // Cache Uniform Locations
+            const uniformNames = [
+                'u_resolution', 'u_camPos', 'u_camTarget', 'u_camUp', 'u_time',
+                'u_mass', 'u_spin', 'u_diskOuter', 'u_diskBrightness', 'u_diskTemp',
+                'u_diskDensity', 'u_enableLensing', 'u_enableDoppler', 'u_palette', 'u_skyIntensity',
+                'u_bgBrightness', 'u_environmentFrom', 'u_environmentTo', 'u_environmentBlend',
+                'u_planetEnabled', 'u_planetPos', 'u_planetRadius', 'u_planetRotation', 'u_planetTidal', 'u_planetType'
+            ];
+            uniformNames.forEach(name => {
+                uniforms[name] = gl.getUniformLocation(shaderProgram, name);
+            });
+
+            return true;
+        }
+
+
+        function computeISCO(a) {
+            const z1 = 1.0 + Math.cbrt(1.0 - a * a) * (Math.cbrt(1.0 + a) + Math.cbrt(1.0 - a));
+            const z2 = Math.sqrt(3.0 * a * a + z1 * z1);
+            return 3.0 + z2 - Math.sqrt(Math.max(0, (3.0 - z1) * (3.0 + z1 + 2.0 * z2)));
+        }
+
+        function updateTelemetry() {
+            const M = state.mass;
+            const a = state.spin;
+            
+            const Rs = 2.0 * M;
+            const rPlus = M * (1.0 + Math.sqrt(Math.max(0.0001, 1.0 - a * a)));
+            
+            // Equatorial prograde photon sphere radius
+            const rPh = 2.0 * M * (1.0 + Math.cos((2.0 / 3.0) * Math.acos(-a)));
+            
+            const rIsco = computeISCO(a) * M;
+            const frameDrag = a / (2.0 * rPlus);
+
+            document.getElementById('hud-mass').innerText = M.toFixed(2) + ' M☉';
+            document.getElementById('hud-spin').innerText = a.toFixed(3);
+            document.getElementById('hud-rs').innerText = Rs.toFixed(3) + ' M';
+            document.getElementById('hud-rplus').innerText = rPlus.toFixed(3) + ' M';
+            document.getElementById('hud-rph').innerText = rPh.toFixed(3) + ' M';
+            document.getElementById('hud-isco').innerText = rIsco.toFixed(3) + ' M';
+            document.getElementById('hud-drag').innerText = frameDrag.toFixed(3) + ' c/M';
+            document.getElementById('hud-camdist').innerText = state.camDist.toFixed(2) + ' M';
+        }
+
+
+        function setupUI() {
+            // Helper function to bind slider
+            function bindSlider(id, targetKey, displayId, formatFn) {
+                const el = document.getElementById(id);
+                const disp = document.getElementById(displayId);
+                el.addEventListener('input', (e) => {
+                    const val = parseFloat(e.target.value);
+                    state[targetKey] = val;
+                    if (disp) disp.innerText = formatFn ? formatFn(val) : val;
+                    updateTelemetry();
+                });
+            }
+
+            bindSlider('slider-mass', 'mass', 'val-mass', v => v.toFixed(1));
+            bindSlider('slider-spin', 'spin', 'val-spin', v => v.toFixed(3));
+            bindSlider('slider-disk-outer', 'diskOuter', 'val-disk-outer', v => v.toFixed(1) + ' M');
+            bindSlider('slider-disk-bright', 'diskBrightness', 'val-disk-bright', v => v.toFixed(1));
+            bindSlider('slider-disk-temp', 'diskTemp', 'val-disk-temp', v => v.toFixed(2));
+            bindSlider('slider-disk-density', 'diskDensity', 'val-disk-density', v => v.toFixed(1));
+            bindSlider('slider-sky', 'skyIntensity', 'val-sky', v => v.toFixed(1));
+            
+            // Resolution scale slider
+            document.getElementById('slider-scale').addEventListener('input', (e) => {
+                state.renderScale = parseFloat(e.target.value);
+                document.getElementById('val-scale').innerText = state.renderScale.toFixed(2) + 'x';
+                resizeCanvas();
+            });
+
+            // Toggles
+            document.getElementById('toggle-lensing').addEventListener('change', (e) => {
+                state.enableLensing = e.target.checked;
+            });
+            document.getElementById('toggle-doppler').addEventListener('change', (e) => {
+                state.enableDoppler = e.target.checked;
+            });
+
+            // Palette Select
+            document.getElementById('palette-select').addEventListener('change', (e) => {
+                state.palette = parseInt(e.target.value);
+            });
+
+            // Presets Dropdown
+            document.getElementById('preset-select').addEventListener('change', (e) => {
+                const preset = e.target.value;
+                if (preset === 'gargantua') {
+                    setPreset(1.0, 0.990, 18.0, 1.5, 1.0, 0, true, true);
+                } else if (preset === 'm87') {
+                    setPreset(2.5, 0.900, 22.0, 1.2, 0.9, 1, true, true);
+                } else if (preset === 'sgta') {
+                    setPreset(1.0, 0.800, 14.0, 1.1, 1.1, 1, true, true);
+                } else if (preset === 'fastkerr') {
+                    setPreset(1.0, 0.998, 16.0, 1.3, 1.2, 2, true, true);
+                } else if (preset === 'schwarzschild') {
+                    setPreset(1.0, 0.000, 16.0, 1.0, 1.0, 3, true, true);
+                }
+            });
+
+            // Reset Camera & UI Toggle Buttons
+            document.getElementById('btn-reset-cam').addEventListener('click', () => {
+                state.camYaw = 0.2;
+                state.camPitch = 0.25;
+                state.targetDist = 18.5;
+                state.camTarget = [0, 0, 0];
+            });
+
+            const controlsPanel = document.getElementById('controls-panel');
+            const headerHud = document.getElementById('header-hud');
+            const telemetryHud = document.getElementById('telemetry-hud');
+            const planetHud = document.getElementById('planet-panel');
+            const timelineHud = document.getElementById('planet-timeline');
+            const eventToast = document.getElementById('event-toast');
+            let uiVisible = true;
+
+            document.getElementById('btn-toggle-ui').addEventListener('click', () => {
+                uiVisible = !uiVisible;
+                const opacity = uiVisible ? '1' : '0';
+                const pointer = uiVisible ? 'auto' : 'none';
+                
+                controlsPanel.style.opacity = opacity;
+                controlsPanel.style.pointerEvents = pointer;
+                headerHud.style.opacity = opacity;
+                telemetryHud.style.opacity = opacity;
+                planetHud.style.opacity = opacity;
+                timelineHud.style.opacity = opacity;
+                eventToast.style.opacity = uiVisible ? '' : '0';
+                [planetHud, timelineHud, eventToast].forEach(panel => panel.style.pointerEvents = pointer);
+                
+                document.getElementById('btn-toggle-ui').innerText = uiVisible ? 'Hide Interface' : 'Show Interface';
+            });
+        }
+
+        function setPreset(mass, spin, diskOuter, bright, temp, palette, lensing, doppler) {
+            state.mass = mass;
+            state.spin = spin;
+            state.diskOuter = diskOuter;
+            state.diskBrightness = bright;
+            state.diskTemp = temp;
+            state.palette = palette;
+            state.enableLensing = lensing;
+            state.enableDoppler = doppler;
+
+            // Update UI elements
+            document.getElementById('slider-mass').value = mass;
+            document.getElementById('val-mass').innerText = mass.toFixed(1);
+            document.getElementById('slider-spin').value = spin;
+            document.getElementById('val-spin').innerText = spin.toFixed(3);
+            document.getElementById('slider-disk-outer').value = diskOuter;
+            document.getElementById('val-disk-outer').innerText = diskOuter.toFixed(1) + ' M';
+            document.getElementById('slider-disk-bright').value = bright;
+            document.getElementById('val-disk-bright').innerText = bright.toFixed(1);
+            document.getElementById('slider-disk-temp').value = temp;
+            document.getElementById('val-disk-temp').innerText = temp.toFixed(2);
+            document.getElementById('palette-select').value = palette;
+            document.getElementById('toggle-lensing').checked = lensing;
+            document.getElementById('toggle-doppler').checked = doppler;
+
+            updateTelemetry();
+            if (typeof planetExperiment !== 'undefined' && planetExperiment.active) {
+                planetExperiment.configMismatch = true;
+                planetExperiment.paused = true;
+                showToast('Black-hole preset changed. Restart the planet experiment to create a clean history for the new render parameters.', 4200);
+            }
+        }
+
+
+
+        // ----- Observatory simulation systems -----
+        // Planet physics uses geometric units (M), advanced at 4 M/s at 1x so orbital
+        // dynamics can be observed interactively; the shader clock still advances at 1x. Telemetry reports the
+        // corresponding physical coordinate time for the selected physical BH mass.
+        const MODEL_TIME_RATE = 4.0;
+        const FIXED_STEP = 0.02;
+        const HISTORY_INTERVAL = 0.5;
+        const MAX_HISTORY = 3000;
+        const C_KM_S = 299792.458;
+        const C_M_S = 299792458;
+        const G_SI = 6.67430e-11;
+        const M_SUN_KG = 1.98847e30;
+        const KM_PER_SOLAR_GRAVITATIONAL_RADIUS = 1.4766250385;
+        const SECONDS_PER_SOLAR_M = 4.925490947e-6;
+        const PLANET_TYPES = {
+            earth:   { label: 'Earth-like', massKg: 5.9722e24, radiusKm: 6371.0, shaderType: 0 },
+            mars:    { label: 'Rocky planet', massKg: 6.4171e23, radiusKm: 3389.5, shaderType: 1 },
+            jupiter: { label: 'Gas giant', massKg: 1.89813e27, radiusKm: 69911.0, shaderType: 2 },
+            ice:     { label: 'Icy world', massKg: 8.93e22, radiusKm: 1560.8, shaderType: 3 }
+        };
+        const planetExperiment = {
+            active: false, visible: false, paused: false, mode: 'live', finished: false,
+            time: 0, accumulator: 0, lastRecordedTime: -Infinity, history: [], events: [],
+            position: [0,0,0], velocity: [0,0,0], fragments: [], rotation: 0, tidalRatio: 0,
+            deformation: 0, closestApproach: Infinity, status: 'idle', startRadius: 12,
+            physicalBHMassSolar: 1e7, type: 'earth', physicalRadiusKm: 6371, massKg: 5.9722e24,
+            physicalRadiusUnits: 0.001, tidalRadiusUnits: 1, visualRadius: 0.08,
+            mu: 1, horizonRadius: 2, startPosition: [0,0,0], startVelocity: [0,0,0],
+            wasMovingInward: false, closeApproachRecorded: false, breakupRecorded: false, debrisCaptureRecorded: false,
+            configMismatch: false, replayCursor: 0, toastTimer: null
+        };
+
+        const $ = (id) => document.getElementById(id);
+        const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+        const vLen = (v) => Math.hypot(v[0], v[1], v[2]);
+        const vAdd = (a,b) => [a[0]+b[0], a[1]+b[1], a[2]+b[2]];
+        const vSub = (a,b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
+        const vScale = (v,s) => [v[0]*s, v[1]*s, v[2]*s];
+        const vDot = (a,b) => a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+        const normalize3 = (v) => { const l = vLen(v) || 1; return [v[0]/l,v[1]/l,v[2]/l]; };
+        function fmtDistance(x) { return Number.isFinite(x) ? `${x.toFixed(2)} M` : '—'; }
+        function fmtTimeM(x) {
+            if (!Number.isFinite(x)) return '—';
+            if (Math.abs(x) < 1000) return `${x.toFixed(1)} M`;
+            return `${(x/1000).toFixed(2)}k M`;
+        }
+        function equivalentPhysicalSeconds(modelTime) {
+            const units = SECONDS_PER_SOLAR_M * planetExperiment.physicalBHMassSolar / Math.max(0.0001, planetExperiment.mu || state.mass);
+            return modelTime * units;
+        }
+        function formatDuration(seconds) {
+            if (!Number.isFinite(seconds) || seconds < 0) return '—';
+            if (seconds < 60) return `${seconds.toFixed(1)} s`;
+            if (seconds < 3600) return `${(seconds/60).toFixed(1)} min`;
+            if (seconds < 86400) return `${(seconds/3600).toFixed(2)} h`;
+            if (seconds < 86400*365.25) return `${(seconds/86400).toFixed(1)} d`;
+            return `${(seconds/(86400*365.25)).toFixed(2)} y`;
+        }
+
+        function showToast(message, duration=3600) {
+            const el = $('event-toast');
+            if (!el) return;
+            el.textContent = message;
+            el.classList.add('show');
+            if (planetExperiment.toastTimer) clearTimeout(planetExperiment.toastTimer);
+            planetExperiment.toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+        }
+
+        function currentHorizonRadius() {
+            return state.mass * (1 + Math.sqrt(Math.max(0, 1 - state.spin * state.spin)));
+        }
+
+        function readPlanetConfiguration() {
+            const type = $('planet-type').value;
+            const profile = PLANET_TYPES[type] || PLANET_TYPES.earth;
+            const physicalBHMassSolar = Math.pow(10, parseFloat($('slider-physical-bh').value));
+            const radiusFactor = parseFloat($('slider-planet-radius').value);
+            const massFactor = parseFloat($('slider-planet-mass').value);
+            const distanceM = parseFloat($('slider-planet-distance').value);
+            const tangentFactor = parseFloat($('slider-planet-tangent').value);
+            const radialFactor = parseFloat($('slider-planet-radial').value);
+            const enhanced = $('toggle-planet-enhanced').checked;
+            const radiusKm = profile.radiusKm * radiusFactor;
+            const massKg = profile.massKg * massFactor;
+            // Consistent conversion: one scene length unit represents r_g / state.mass.
+            // The existing render mass is dimensionless and is NOT assumed to be solar masses.
+            const kmPerSceneUnit = KM_PER_SOLAR_GRAVITATIONAL_RADIUS * physicalBHMassSolar / Math.max(0.0001, state.mass);
+            const physicalRadiusUnits = radiusKm / kmPerSceneUnit;
+            const tidalRadiusKm = radiusKm * Math.cbrt((2 * physicalBHMassSolar * M_SUN_KG) / massKg);
+            const tidalRadiusUnits = tidalRadiusKm / kmPerSceneUnit;
+            const visualRadius = enhanced ? Math.max(physicalRadiusUnits, 0.075 * state.mass * radiusFactor) : physicalRadiusUnits;
+            return { type, profile, physicalBHMassSolar, radiusFactor, massFactor, distanceM, tangentFactor, radialFactor,
+                enhanced, radiusKm, massKg, kmPerSceneUnit, physicalRadiusUnits, tidalRadiusUnits, visualRadius };
+        }
+
+        function resetPlanetModel({notify=true}={}) {
+            const cfg = readPlanetConfiguration();
+            const mu = state.mass;
+            const r = Math.max(currentHorizonRadius() * 1.08, cfg.distanceM * mu);
+            const vc = Math.sqrt(mu / r);
+            const pos = [r, 0, 0];
+            const vel = [cfg.radialFactor * vc, 0, cfg.tangentFactor * vc];
+            Object.assign(planetExperiment, {
+                active: true, visible: true, paused: false, mode: 'live', finished: false,
+                time: 0, accumulator: 0, lastRecordedTime: -Infinity, history: [], events: [],
+                position: pos.slice(), velocity: vel.slice(), fragments: [], rotation: 0,
+                tidalRatio: Math.pow(cfg.tidalRadiusUnits / Math.max(r, 1e-5), 3), deformation: 0,
+                closestApproach: r, status: 'approaching', startRadius: r,
+                physicalBHMassSolar: cfg.physicalBHMassSolar, type: cfg.type,
+                physicalRadiusKm: cfg.radiusKm, massKg: cfg.massKg,
+                physicalRadiusUnits: cfg.physicalRadiusUnits, tidalRadiusUnits: cfg.tidalRadiusUnits,
+                visualRadius: cfg.visualRadius, mu, horizonRadius: currentHorizonRadius(),
+                startPosition: pos.slice(), startVelocity: vel.slice(), wasMovingInward: cfg.radialFactor < 0,
+                closeApproachRecorded: false, breakupRecorded: false, debrisCaptureRecorded:false, configMismatch: false, replayCursor: 0
+            });
+            $('planet-panel').style.display = 'block';
+            $('planet-timeline').style.display = 'block';
+            document.body.classList.add('planet-active');
+            $('btn-launch-planet').textContent = '↻ Restart Planet Simulation';
+            $('btn-planet-pause').textContent = 'Pause';
+            addPlanetEvent('Experiment launched', `Initial position ${fmtDistance(r)}; initial speed ${(vLen(vel)).toFixed(3)} c. Newtonian orbital dynamics; visual-time rate ${MODEL_TIME_RATE} M/s at 1×.`, 'launch', true);
+            recordPlanetHistory(true);
+            rebuildTimelineMarkers();
+            updatePlanetPanel();
+            if (notify) showToast('Planet launched. Its trajectory depends on the configured initial velocity; tidal visuals are approximate.', 4800);
+        }
+
+        function addPlanetEvent(label, detail, kind='event', force=false) {
+            const t = planetExperiment.time;
+            const duplicate = planetExperiment.events.some(e => e.label === label && Math.abs(e.time-t) < 0.3);
+            if (!duplicate || force) {
+                planetExperiment.events.push({time:t, label, detail, kind});
+                planetExperiment.events.sort((a,b)=>a.time-b.time);
+                rebuildTimelineMarkers();
+                showToast(`${label}: ${detail}`, 4400);
+                // Event states are checkpointed immediately for accurate marker navigation.
+                if (planetExperiment.active) recordPlanetHistory(true);
+            }
+        }
+
+        function clearPlanetExperiment() {
+            Object.assign(planetExperiment, {
+                active:false, visible:false, paused:false, mode:'live', finished:false,
+                time:0, accumulator:0, lastRecordedTime:-Infinity, history:[], events:[],
+                position:[0,0,0], velocity:[0,0,0], fragments:[], rotation:0, tidalRatio:0,
+                deformation:0, closestApproach:Infinity, status:'idle', configMismatch:false, replayCursor:0
+            });
+            $('planet-panel').style.display = 'none';
+            $('planet-timeline').style.display = 'none';
+            document.body.classList.remove('planet-active');
+            $('btn-launch-planet').textContent = '✦ Launch Planet Simulation';
+            clearTrailCanvas();
+            showToast('Planet, debris, trajectory and experiment timeline removed. Black hole settings and camera are unchanged.', 3200);
+        }
+
+        function accelerationAt(pos, mu=planetExperiment.mu) {
+            const r2 = Math.max(vDot(pos,pos), 1e-8);
+            const r = Math.sqrt(r2);
+            return vScale(pos, -mu / (r2 * r));
+        }
+
+        // Kick-drift-kick leapfrog: deterministic and substantially more stable for orbits than Euler integration.
+        function integrateParticle(particle, h, mu=planetExperiment.mu) {
+            const a0 = accelerationAt(particle.position, mu);
+            const halfVel = vAdd(particle.velocity, vScale(a0, h * 0.5));
+            const nextPos = vAdd(particle.position, vScale(halfVel, h));
+            const a1 = accelerationAt(nextPos, mu);
+            particle.position = nextPos;
+            particle.velocity = vAdd(halfVel, vScale(a1, h * 0.5));
+        }
+
+        function updatePlanetPhysics(h) {
+            if (!planetExperiment.active || planetExperiment.finished || planetExperiment.mode !== 'live' || planetExperiment.paused || state.paused || planetExperiment.configMismatch) return;
+            planetExperiment.accumulator += h;
+            let steps = 0;
+            while (planetExperiment.accumulator >= FIXED_STEP && steps < 110 && !planetExperiment.finished) {
+                const oldPos = planetExperiment.position.slice();
+                const oldV = planetExperiment.velocity.slice();
+                const oldRadial = vDot(oldPos, oldV) / Math.max(vLen(oldPos), 1e-8);
+                const mainParticle = { position: planetExperiment.position, velocity: planetExperiment.velocity };
+                integrateParticle(mainParticle, FIXED_STEP, planetExperiment.mu);
+                planetExperiment.position = mainParticle.position;
+                planetExperiment.velocity = mainParticle.velocity;
+                planetExperiment.time += FIXED_STEP;
+                planetExperiment.rotation += FIXED_STEP * (0.7 / Math.pow(Math.max(vLen(planetExperiment.position), 1), 0.35));
+
+                const radius = vLen(planetExperiment.position);
+                const radialV = vDot(planetExperiment.position, planetExperiment.velocity) / Math.max(radius, 1e-8);
+                planetExperiment.closestApproach = Math.min(planetExperiment.closestApproach, radius);
+                planetExperiment.tidalRatio = Math.pow(planetExperiment.tidalRadiusUnits / Math.max(radius, 1e-8), 3);
+                planetExperiment.deformation = clamp((planetExperiment.tidalRatio - 0.10) / 0.90, 0, 1);
+                if (oldRadial < 0 && radialV >= 0 && !planetExperiment.closeApproachRecorded) {
+                    planetExperiment.closeApproachRecorded = true;
+                    if (planetExperiment.status !== 'fragmenting') planetExperiment.status = 'flyby';
+                    addPlanetEvent('Closest approach', `The centre reached ${fmtDistance(radius)}; the radial motion has turned outward.`, 'approach');
+                }
+                if (planetExperiment.tidalRatio >= 0.20 && !planetExperiment.breakupRecorded && planetExperiment.status !== 'deforming') {
+                    planetExperiment.status = 'deforming';
+                    addPlanetEvent('Tidal deformation', `Estimated differential gravity is ${planetExperiment.tidalRatio.toFixed(2)}× the planet's surface self-gravity. Shape change is an exaggerated visual approximation.`, 'tidal');
+                }
+                if (planetExperiment.tidalRatio >= 1.0 && !planetExperiment.breakupRecorded && radius > planetExperiment.horizonRadius) {
+                    beginFragmentation();
+                }
+
+                // Fragments follow the same Newtonian point-mass field and have individual horizon checks.
+                if (planetExperiment.fragments.length) {
+                    for (const frag of planetExperiment.fragments) {
+                        if (!frag.alive) continue;
+                        integrateParticle(frag, FIXED_STEP, planetExperiment.mu);
+                        const fr = vLen(frag.position);
+                        if (fr <= planetExperiment.horizonRadius) {
+                            frag.alive = false;
+                            frag.reason = 'captured';
+                            if (!planetExperiment.debrisCaptureRecorded) {
+                                planetExperiment.debrisCaptureRecorded = true;
+                                frag.horizonNoted = true;
+                                addPlanetEvent('Debris crossed the horizon', 'A debris fragment passed inside the modeled horizon and is no longer rendered outside it.', 'capture');
+                            }
+                        } else if (fr > 70 * planetExperiment.mu && vDot(frag.position, frag.velocity) > 0) {
+                            frag.alive = false;
+                            frag.reason = 'escaped';
+                        }
+                    }
+                    if (planetExperiment.breakupRecorded && !planetExperiment.fragments.some(f => f.alive)) {
+                        planetExperiment.finished = true;
+                        planetExperiment.status = planetExperiment.fragments.some(f => f.reason === 'captured') ? 'captured' : 'escaped';
+                    }
+                }
+
+                if (planetExperiment.visible && radius <= planetExperiment.horizonRadius) {
+                    planetExperiment.visible = false;
+                    planetExperiment.finished = true;
+                    planetExperiment.status = 'captured';
+                    addPlanetEvent('Event-horizon crossing', 'The model removes the planet once its centre crosses the horizon. In its own proper time, infall does not freeze; distant signals would be increasingly delayed and redshifted, which this renderer does not model.', 'capture');
+                }
+                if (radius > 70 * planetExperiment.mu && radialV > 0) {
+                    planetExperiment.visible = false;
+                    planetExperiment.finished = true;
+                    planetExperiment.status = 'escaped';
+                    addPlanetEvent('Escape trajectory', `The planet passed ${fmtDistance(radius)} while moving outward and is marked escaped.`, 'escape');
+                }
+                if (!planetExperiment.finished && !planetExperiment.breakupRecorded) {
+                    const momentum = [
+                        planetExperiment.position[1]*planetExperiment.velocity[2]-planetExperiment.position[2]*planetExperiment.velocity[1],
+                        planetExperiment.position[2]*planetExperiment.velocity[0]-planetExperiment.position[0]*planetExperiment.velocity[2],
+                        planetExperiment.position[0]*planetExperiment.velocity[1]-planetExperiment.position[1]*planetExperiment.velocity[0]
+                    ];
+                    const energy = 0.5 * vDot(planetExperiment.velocity, planetExperiment.velocity) - planetExperiment.mu / Math.max(radius, 1e-8);
+                    const eccentricity = Math.sqrt(Math.max(0, 1 + (2 * energy * vDot(momentum, momentum)) / Math.max(planetExperiment.mu*planetExperiment.mu, 1e-8)));
+                    if (planetExperiment.tidalRatio >= 0.20) planetExperiment.status = 'deforming';
+                    else if (energy < 0 && eccentricity < 0.25 && planetExperiment.time > 1) planetExperiment.status = 'orbiting';
+                    else if (radialV < -0.005) planetExperiment.status = 'approaching';
+                    else if (radialV > 0.005 && planetExperiment.closeApproachRecorded) planetExperiment.status = 'flyby';
+                }
+                if (planetExperiment.time - planetExperiment.lastRecordedTime >= HISTORY_INTERVAL) recordPlanetHistory(true);
+                planetExperiment.accumulator -= FIXED_STEP;
+                steps++;
+            }
+            if (steps > 0 && steps >= 110) planetExperiment.accumulator = Math.min(planetExperiment.accumulator, FIXED_STEP);
+            if (planetExperiment.active) updatePlanetPanel();
+        }
+
+        function beginFragmentation() {
+            if (planetExperiment.breakupRecorded) return;
+            planetExperiment.breakupRecorded = true;
+            planetExperiment.visible = false;
+            planetExperiment.status = 'fragmenting';
+            const r = vLen(planetExperiment.position);
+            const radial = normalize3(planetExperiment.position);
+            const vel = planetExperiment.velocity;
+            const tangent = normalize3([ -radial[2], 0, radial[0] ]);
+            const vertical = normalize3([0,1,0]);
+            const count = 18;
+            planetExperiment.fragments = [];
+            for (let i=0; i<count; i++) {
+                const angle = 2 * Math.PI * i / count;
+                const ring = vAdd(vScale(tangent, Math.cos(angle)), vScale(vertical, Math.sin(angle)));
+                const offset = vScale(ring, planetExperiment.visualRadius * (0.3 + (i % 4) * 0.12));
+                const velocityKick = vScale(ring, (0.012 + (i % 5) * 0.006) * Math.sqrt(planetExperiment.mu / Math.max(r, 1)));
+                planetExperiment.fragments.push({
+                    id:i, position:vAdd(planetExperiment.position, offset), velocity:vAdd(vel, velocityKick),
+                    radius:planetExperiment.visualRadius * (0.035 + (i % 3) * 0.014), alive:true, horizonNoted:false,
+                    hue:(i%3)
+                });
+            }
+            addPlanetEvent('Planet disrupted', `The tidal estimate exceeded unity outside the horizon at ${fmtDistance(r)}. ${count} debris fragments now follow individual Newtonian trajectories; this is not hydrodynamics.`, 'fragment');
+            recordPlanetHistory(true);
+        }
+
+        function snapshotPlanet() {
+            return {
+                time:planetExperiment.time,
+                position:planetExperiment.position.slice(), velocity:planetExperiment.velocity.slice(),
+                rotation:planetExperiment.rotation, tidalRatio:planetExperiment.tidalRatio,
+                deformation:planetExperiment.deformation, status:planetExperiment.status,
+                visible:planetExperiment.visible, finished:planetExperiment.finished,
+                closestApproach:planetExperiment.closestApproach, breakupRecorded:planetExperiment.breakupRecorded,
+                closeApproachRecorded:planetExperiment.closeApproachRecorded, debrisCaptureRecorded:planetExperiment.debrisCaptureRecorded,
+                fragments:planetExperiment.fragments.map(f => ({ id:f.id, position:f.position.slice(), velocity:f.velocity.slice(), radius:f.radius, alive:f.alive, hue:f.hue, horizonNoted:f.horizonNoted, reason:f.reason }))
+            };
+        }
+
+        function recordPlanetHistory(force=false) {
+            if (!planetExperiment.active) return;
+            const last = planetExperiment.history[planetExperiment.history.length - 1];
+            if (!force && last && planetExperiment.time - last.time < HISTORY_INTERVAL) return;
+            if (last && Math.abs(last.time - planetExperiment.time) < 1e-5) {
+                planetExperiment.history[planetExperiment.history.length - 1] = snapshotPlanet();
+            } else {
+                planetExperiment.history.push(snapshotPlanet());
+            }
+            planetExperiment.lastRecordedTime = planetExperiment.time;
+            if (planetExperiment.history.length > MAX_HISTORY) {
+                planetExperiment.history.splice(0, planetExperiment.history.length - MAX_HISTORY);
+                const oldestTime = planetExperiment.history[0].time;
+                planetExperiment.events = planetExperiment.events.filter(e => e.time >= oldestTime - 1e-5);
+            }
+            updateTimelineControls();
+        }
+
+        function interpolateArray(a,b,t) {
+            return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t];
+        }
+        function restoreHistoryAt(indexFloat) {
+            const hist = planetExperiment.history;
+            if (!hist.length) return;
+            const idx = clamp(indexFloat, 0, hist.length-1);
+            const lo = Math.floor(idx), hi = Math.min(hist.length-1, lo+1), a=hist[lo], b=hist[hi];
+            const t = idx - lo;
+            // Do not interpolate across discontinuous outcomes (fragmentation/capture/escape).
+            const discreteBoundary = a.status !== b.status || a.breakupRecorded !== b.breakupRecorded || a.visible !== b.visible;
+            const useB = discreteBoundary ? (t >= 0.5) : false;
+            const s = useB ? b : a;
+            const mix = (x,y) => interpolateArray(x,y,t);
+            planetExperiment.time = discreteBoundary ? s.time : a.time + (b.time-a.time)*t;
+            planetExperiment.position = discreteBoundary ? s.position.slice() : mix(a.position,b.position);
+            planetExperiment.velocity = discreteBoundary ? s.velocity.slice() : mix(a.velocity,b.velocity);
+            planetExperiment.rotation = discreteBoundary ? s.rotation : a.rotation + (b.rotation-a.rotation)*t;
+            planetExperiment.tidalRatio = discreteBoundary ? s.tidalRatio : a.tidalRatio + (b.tidalRatio-a.tidalRatio)*t;
+            planetExperiment.deformation = discreteBoundary ? s.deformation : a.deformation + (b.deformation-a.deformation)*t;
+            planetExperiment.status = s.status;
+            planetExperiment.visible = s.visible;
+            planetExperiment.finished = s.finished;
+            planetExperiment.closestApproach = s.closestApproach;
+            planetExperiment.breakupRecorded = s.breakupRecorded;
+            planetExperiment.closeApproachRecorded = s.closeApproachRecorded;
+            planetExperiment.debrisCaptureRecorded = !!s.debrisCaptureRecorded;
+            if (!discreteBoundary && a.fragments.length === b.fragments.length && a.fragments.every((f,i)=>f.id===b.fragments[i].id)) {
+                planetExperiment.fragments = a.fragments.map((f,i) => {
+                    const g=b.fragments[i];
+                    return { ...f, position:mix(f.position,g.position), velocity:mix(f.velocity,g.velocity), radius:f.radius+(g.radius-f.radius)*t,
+                        alive:t<0.5?f.alive:g.alive, horizonNoted:t<0.5?f.horizonNoted:g.horizonNoted };
+                });
+            } else {
+                planetExperiment.fragments = s.fragments.map(f=>({...f,position:f.position.slice(),velocity:f.velocity.slice()}));
+            }
+            planetExperiment.replayCursor = idx;
+            updateTimelineControls();
+            updatePlanetPanel();
+        }
+
+        function switchPlanetMode(mode) {
+            if (!planetExperiment.active || !planetExperiment.history.length) return;
+            if (mode === 'timeline') {
+                planetExperiment.mode = 'timeline';
+                // Timeline scrubbing freezes the planet state; the black-hole backdrop may keep running.
+                planetExperiment.paused = true;
+                const last = planetExperiment.history.length - 1;
+                if (planetExperiment.replayCursor >= last - 0.01) restoreHistoryAt(last);
+            } else if (mode === 'live') {
+                const cursor = clamp(planetExperiment.replayCursor, 0, planetExperiment.history.length-1);
+                if (cursor < planetExperiment.history.length-1) {
+                    planetExperiment.history = planetExperiment.history.slice(0, Math.floor(cursor)+1);
+                    const branchTime = planetExperiment.history[planetExperiment.history.length-1].time;
+                    planetExperiment.events = planetExperiment.events.filter(e=>e.time <= branchTime + 1e-5);
+                    rebuildTimelineMarkers();
+                    showToast('Live simulation branched from the selected historical state; future history was discarded.', 3600);
+                }
+                planetExperiment.mode = 'live';
+                planetExperiment.paused = false;
+                planetExperiment.finished = ['captured','escaped'].includes(planetExperiment.status);
+                state.paused = false;
+                if (!planetExperiment.finished) planetExperiment.status = planetExperiment.tidalRatio >= 0.2 ? 'deforming' : 'approaching';
+                recordPlanetHistory(true);
+            } else if (mode === 'replay') {
+                planetExperiment.mode = 'replay';
+                planetExperiment.paused = false;
+                state.paused = false;
+                planetExperiment.replayCursor = 0;
+                restoreHistoryAt(0);
+                planetExperiment.mode = 'replay';
+            }
+            updateTimelineModeButtons();
+            updateSpeedUI();
+            updateTimelineControls();
+        }
+
+        function updateReplay(dtModel) {
+            if (!planetExperiment.active || planetExperiment.mode !== 'replay' || state.paused || planetExperiment.paused) return;
+            const speed = Math.max(0.2, state.speedMultiplier);
+            const increment = dtModel / HISTORY_INTERVAL;
+            planetExperiment.replayCursor = Math.min(planetExperiment.history.length-1, planetExperiment.replayCursor + increment);
+            restoreHistoryAt(planetExperiment.replayCursor);
+            planetExperiment.mode = 'replay';
+            if (planetExperiment.replayCursor >= planetExperiment.history.length-1) {
+                planetExperiment.mode = 'timeline';
+                planetExperiment.paused = true;
+                showToast('Replay reached the latest recorded state. Choose Live to branch forward or scrub to inspect an event.', 3600);
+                updateTimelineModeButtons();
+                updateSpeedUI();
+            }
+        }
+
+        function updateTimelineControls() {
+            if (!planetExperiment.active) return;
+            const hist = planetExperiment.history;
+            if (!hist.length) return;
+            const max = hist.length - 1;
+            if (planetExperiment.mode === 'live') planetExperiment.replayCursor = max;
+            $('timeline-slider').value = max ? Math.round((planetExperiment.replayCursor / max) * 1000) : 0;
+            const total = hist[max].time;
+            const equivalent = formatDuration(equivalentPhysicalSeconds(planetExperiment.time));
+            $('timeline-clock').textContent = `${fmtTimeM(planetExperiment.time)} · ${equivalent} equivalent / ${fmtTimeM(total)} recorded`;
+            rebuildTimelineMarkers();
+        }
+
+        function rebuildTimelineMarkers() {
+            const host = $('timeline-markers');
+            if (!host || !planetExperiment.active) return;
+            host.replaceChildren();
+            for (const evt of planetExperiment.events.slice(-24)) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'event-marker';
+                btn.textContent = `${evt.label} · ${fmtTimeM(evt.time)}`;
+                btn.title = evt.detail;
+                btn.addEventListener('click', () => jumpToEvent(evt));
+                host.appendChild(btn);
+            }
+        }
+
+        function jumpToEvent(evt) {
+            const hist = planetExperiment.history;
+            if (!hist.length) return;
+            let closest = 0, err = Infinity;
+            for (let i=0; i<hist.length; i++) {
+                const d = Math.abs(hist[i].time - evt.time);
+                if (d < err) { err=d; closest=i; }
+            }
+            planetExperiment.mode = 'timeline';
+            planetExperiment.paused = true;
+            restoreHistoryAt(closest);
+            updateTimelineModeButtons();
+            updateSpeedUI();
+            showToast(`${evt.label} — ${evt.detail}`, 4000);
+        }
+
+        function updateTimelineModeButtons() {
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === planetExperiment.mode));
+            $('btn-timeline-play').textContent = (state.paused || planetExperiment.paused || planetExperiment.mode === 'timeline') ? '▶' : 'Ⅱ';
+        }
+
+        function updatePlanetPanel() {
+            if (!planetExperiment.active) return;
+            const r = vLen(planetExperiment.position);
+            const speed = vLen(planetExperiment.velocity);
+            const radialV = vDot(planetExperiment.position, planetExperiment.velocity) / Math.max(r, 1e-8);
+            const kmPerUnit = KM_PER_SOLAR_GRAVITATIONAL_RADIUS * planetExperiment.physicalBHMassSolar / Math.max(0.0001, planetExperiment.mu || state.mass);
+            const rMeters = r * kmPerUnit * 1000;
+            const tidalAccel = (2 * G_SI * planetExperiment.physicalBHMassSolar * M_SUN_KG * planetExperiment.physicalRadiusKm * 1000) / Math.max(rMeters**3, 1);
+            $('planet-status').innerHTML = `<span class="status-dot"></span>${planetExperiment.status[0].toUpperCase()+planetExperiment.status.slice(1)}`;
+            $('planet-distance-now').textContent = fmtDistance(r);
+            $('planet-velocity-now').textContent = `${speed.toFixed(3)} c · ${(speed*C_KM_S).toFixed(0)} km/s`;
+            $('planet-radial-now').textContent = `${radialV>=0?'+':''}${radialV.toFixed(3)} c`;
+            $('planet-time-now').textContent = `${fmtTimeM(planetExperiment.time)} (${formatDuration(equivalentPhysicalSeconds(planetExperiment.time))})`;
+            $('planet-closest-now').textContent = fmtDistance(planetExperiment.closestApproach);
+            $('planet-tidal-now').textContent = `${tidalAccel.toExponential(2)} m/s² · ${planetExperiment.tidalRatio.toFixed(2)}× self-gravity`;
+            $('planet-horizon-now').textContent = fmtDistance(planetExperiment.horizonRadius);
+            $('planet-tidal-radius-now').textContent = fmtDistance(planetExperiment.tidalRadiusUnits);
+            const explanations = {
+                approaching: 'The radial velocity is inward. Gravity changes both speed and direction; the initial tangential component determines whether the path falls in, loops around, or flies by.',
+                orbiting: 'The model is currently near an orbit-like path. It uses Newtonian point-mass gravity, so strong-field Kerr orbital effects are not included.',
+                deforming: 'The tidal estimate is significant: the near side is accelerated more strongly than the far side. The stretched ellipsoid is a visual approximation, not a material-stress or fluid solver.',
+                fragmenting: 'Debris fragments have separate positions and velocities and continue under the modeled central gravity. Their size and heating are illustrative, not hydrodynamically calculated.',
+                captured: 'The model has removed the body after its centre reaches the horizon. The infalling planet does not freeze in its own proper time; distant light signals are increasingly delayed and redshifted.',
+                escaped: 'The body is on an outward escape path in this model. Not every encounter leads to capture or disruption.',
+                flyby: 'The radial motion turned outward near closest approach. This is a flyby-like outcome unless later perturbations change the path.'
+            };
+            $('planet-explanation').textContent = explanations[planetExperiment.status] || 'The recorded trajectory is available for scrubbing and replay.';
+            $('btn-planet-pause').textContent = planetExperiment.paused ? 'Resume' : 'Pause';
+        }
+
+        function updateSpeedUI() {
+            $('speed-readout').textContent = `${state.speedMultiplier.toFixed(2)}×`;
+            $('slider-speed').value = state.speedMultiplier;
+            $('btn-simulation-pause').textContent = state.paused ? 'Resume' : 'Pause';
+            document.querySelectorAll('#speed-presets [data-speed]').forEach(btn => {
+                btn.classList.toggle('active', Math.abs(parseFloat(btn.dataset.speed)-state.speedMultiplier)<0.001);
+            });
+            updateTimelineModeButtons();
+        }
+
+        function setSpeed(value) {
+            state.speedMultiplier = clamp(parseFloat(value) || 1, 0.1, 10);
+            updateSpeedUI();
+        }
+
+        function setupObservatoryControls() {
+            $('slider-speed').addEventListener('input', e => setSpeed(e.target.value));
+            document.querySelectorAll('#speed-presets [data-speed]').forEach(btn => btn.addEventListener('click', () => setSpeed(btn.dataset.speed)));
+            $('btn-speed-reset').addEventListener('click', () => setSpeed(1));
+            $('btn-simulation-pause').addEventListener('click', () => {
+                state.paused = !state.paused;
+                if (state.paused && planetExperiment.active && planetExperiment.mode === 'live') planetExperiment.paused = true;
+                else if (!state.paused && planetExperiment.active && planetExperiment.mode === 'live') planetExperiment.paused = false;
+                updateSpeedUI();
+                if (state.paused) showToast('Simulation paused. Camera navigation and interface controls remain available.', 1800);
+            });
+
+            $('environment-select').addEventListener('change', e => {
+                const next = parseInt(e.target.value,10);
+                state.environmentFrom = state.environmentTo;
+                state.environmentTo = next;
+                state.environmentBlend = 0;
+            });
+            $('slider-bg-brightness').addEventListener('input', e => {
+                state.backgroundBrightness = parseFloat(e.target.value);
+                $('val-bg-brightness').textContent = state.backgroundBrightness.toFixed(2);
+            });
+
+            const updatePlanetConfigLabels = () => {
+                const exponent = {'4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'}[$('slider-physical-bh').value] || '⁷';
+                $('val-physical-bh').textContent = `10${exponent} M☉`;
+                $('val-planet-distance').textContent = `${parseFloat($('slider-planet-distance').value).toFixed(1)} M`;
+                $('val-planet-tangent').textContent = `${parseFloat($('slider-planet-tangent').value).toFixed(2)}×`;
+                const rv = parseFloat($('slider-planet-radial').value);
+                $('val-planet-radial').textContent = `${rv < 0 ? '−' : '+'}${Math.abs(rv).toFixed(2)}×`;
+                $('val-planet-radius').textContent = `${parseFloat($('slider-planet-radius').value).toFixed(1)}×`;
+                $('val-planet-mass').textContent = `${parseFloat($('slider-planet-mass').value).toFixed(1)}×`;
+            };
+            ['slider-physical-bh','slider-planet-distance','slider-planet-tangent','slider-planet-radial','slider-planet-radius','slider-planet-mass'].forEach(id => $(id).addEventListener('input', updatePlanetConfigLabels));
+            updatePlanetConfigLabels();
+            $('btn-launch-planet').addEventListener('click', () => resetPlanetModel());
+            $('btn-planet-restart').addEventListener('click', () => resetPlanetModel({notify:true}));
+            $('btn-planet-remove').addEventListener('click', clearPlanetExperiment);
+            $('btn-black-hole-only').addEventListener('click', clearPlanetExperiment);
+            $('btn-planet-pause').addEventListener('click', () => {
+                if (!planetExperiment.active) return;
+                if (planetExperiment.mode === 'timeline') {
+                    switchPlanetMode('live');
+                    return;
+                }
+                planetExperiment.paused = !planetExperiment.paused;
+                $('btn-planet-pause').textContent = planetExperiment.paused ? 'Resume' : 'Pause';
+                updateTimelineModeButtons();
+            });
+
+            $('timeline-slider').addEventListener('input', e => {
+                if (!planetExperiment.active || !planetExperiment.history.length) return;
+                const max = planetExperiment.history.length-1;
+                planetExperiment.mode = 'timeline';
+                planetExperiment.paused = true;
+                restoreHistoryAt((parseFloat(e.target.value)/1000)*max);
+                updateTimelineModeButtons();
+                updateSpeedUI();
+            });
+            $('btn-timeline-back').addEventListener('click', () => {
+                if (!planetExperiment.history.length) return;
+                switchPlanetMode('timeline');
+                restoreHistoryAt(Math.max(0, planetExperiment.replayCursor - Math.max(1, planetExperiment.history.length*0.02)));
+            });
+            $('btn-timeline-forward').addEventListener('click', () => {
+                if (!planetExperiment.history.length) return;
+                switchPlanetMode('timeline');
+                restoreHistoryAt(Math.min(planetExperiment.history.length-1, planetExperiment.replayCursor + Math.max(1, planetExperiment.history.length*0.02)));
+            });
+            $('btn-timeline-play').addEventListener('click', () => {
+                if (!planetExperiment.active) return;
+                if (planetExperiment.mode === 'replay' && !planetExperiment.paused) {
+                    planetExperiment.paused = true;
+                    planetExperiment.mode = 'timeline';
+                } else if (planetExperiment.mode === 'timeline' || planetExperiment.finished) {
+                    switchPlanetMode('replay');
+                    return;
+                } else {
+                    planetExperiment.paused = !planetExperiment.paused;
+                }
+                updateTimelineModeButtons(); updateSpeedUI();
+            });
+            $('btn-timeline-replay').addEventListener('click', () => switchPlanetMode('replay'));
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.addEventListener('click', () => switchPlanetMode(btn.dataset.mode)));
+
+            // If render-mass/spin changes during an experiment, pause that experiment until restarted;
+            // never mix old trajectory history with a new black-hole parameter set.
+            ['slider-mass','slider-spin'].forEach(id => $(id).addEventListener('change', () => {
+                if (planetExperiment.active) {
+                    planetExperiment.configMismatch = true;
+                    planetExperiment.paused = true;
+                    showToast('Black-hole render parameters changed. Restart the planet experiment to create a clean, compatible history.', 4200);
+                    updatePlanetPanel();
+                }
+            }));
+            updateSpeedUI();
+        }
+
+        function projectWorldPoint(point, camPos) {
+            const ww = normalize3(vSub(state.camTarget, camPos));
+            let uu = normalize3([-ww[2], 0, ww[0]]); // cross(forward, world-up)
+            if (vLen(uu) < 0.001) uu = [1,0,0];
+            const vv = normalize3([
+                uu[1]*ww[2]-uu[2]*ww[1],
+                uu[2]*ww[0]-uu[0]*ww[2],
+                uu[0]*ww[1]-uu[1]*ww[0]
+            ]);
+            const rel = vSub(point, camPos);
+            const depth = vDot(rel, ww);
+            if (depth <= 0.05) return null;
+            const h = window.innerHeight;
+            return { x:window.innerWidth*0.5 + vDot(rel,uu)/depth*h/1.4,
+                     y:window.innerHeight*0.5 - vDot(rel,vv)/depth*h/1.4,
+                     depth };
+        }
+
+        function clearTrailCanvas() {
+            const c = $('trail-canvas');
+            if (!c) return;
+            const ctx = c.getContext('2d');
+            ctx.clearRect(0,0,c.width,c.height);
+        }
+
+        function drawWorldOverlay(camPos) {
+            const c = $('trail-canvas');
+            if (!c) return;
+            const ctx = c.getContext('2d');
+            const w = window.innerWidth, h = window.innerHeight, dpr = state.pixelRatio || 1;
+            if (c.width !== Math.floor(w*dpr) || c.height !== Math.floor(h*dpr)) {
+                c.width = Math.floor(w*dpr); c.height = Math.floor(h*dpr);
+                c.style.width = `${w}px`; c.style.height = `${h}px`;
+            }
+            ctx.setTransform(dpr,0,0,dpr,0,0);
+            ctx.clearRect(0,0,w,h);
+            if (!planetExperiment.active || !planetExperiment.history.length) return;
+            const hist = planetExperiment.history;
+            const endIndex = planetExperiment.mode === 'live' ? hist.length-1 : Math.floor(planetExperiment.replayCursor);
+            const path = hist.slice(Math.max(0, endIndex-700), endIndex+1).map(s=>s.position);
+            if (planetExperiment.mode === 'live' && planetExperiment.visible) path.push(planetExperiment.position);
+            const origin = projectWorldPoint([0,0,0],camPos);
+            const horizonScreen = origin ? currentHorizonRadius() * h / (Math.max(0.05, origin.depth) * 1.4) * 1.45 : 0;
+            // 2D trail overlay is a projection aid only; it is clipped around the shadow to avoid drawing over the core.
+            ctx.lineWidth = 1.45; ctx.lineJoin='round'; ctx.lineCap='round';
+            for (let i=1;i<path.length;i++) {
+                const a=projectWorldPoint(path[i-1],camPos), b=projectWorldPoint(path[i],camPos);
+                if (!a || !b || !origin) continue;
+                const da=Math.hypot(a.x-origin.x,a.y-origin.y), db=Math.hypot(b.x-origin.x,b.y-origin.y);
+                if (da < horizonScreen || db < horizonScreen) continue;
+                const grad = (i-1)/Math.max(1,path.length-1);
+                ctx.strokeStyle = `rgba(${Math.round(40+grad*35)},${Math.round(180+grad*45)},${Math.round(230+grad*25)},${0.18+0.62*grad})`;
+                ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+            }
+            // Debris is rendered as projected, individually integrated glowing points; 3D positions and velocities are recorded.
+            for (const frag of planetExperiment.fragments) {
+                if (!frag.alive || vLen(frag.position) <= planetExperiment.horizonRadius) continue;
+                const p=projectWorldPoint(frag.position,camPos);
+                if (!p || p.x < -20 || p.x > w+20 || p.y < -20 || p.y > h+20) continue;
+                if (origin && Math.hypot(p.x-origin.x,p.y-origin.y) < horizonScreen) continue;
+                const r = clamp(2.1 * h / Math.max(p.depth,1) * (frag.radius/0.01), 1.2, 4.8);
+                ctx.beginPath(); ctx.fillStyle = frag.hue===0 ? 'rgba(255,189,96,.9)' : (frag.hue===1 ? 'rgba(255,121,73,.86)' : 'rgba(110,220,255,.88)');
+                ctx.shadowBlur=10; ctx.shadowColor=ctx.fillStyle; ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
+            }
+        }
+
+        function updatePlanetUniforms() {
+            const enabled = planetExperiment.active && planetExperiment.visible && !planetExperiment.configMismatch;
+            gl.uniform1i(uniforms.u_planetEnabled, enabled ? 1 : 0);
+            gl.uniform3f(uniforms.u_planetPos, planetExperiment.position[0], planetExperiment.position[1], planetExperiment.position[2]);
+            gl.uniform1f(uniforms.u_planetRadius, Math.max(planetExperiment.visualRadius || 0.001, 0.0001));
+            gl.uniform1f(uniforms.u_planetRotation, planetExperiment.rotation || 0);
+            gl.uniform1f(uniforms.u_planetTidal, planetExperiment.deformation || 0);
+            const type = PLANET_TYPES[planetExperiment.type] || PLANET_TYPES.earth;
+            gl.uniform1i(uniforms.u_planetType, type.shaderType);
+        }
+
+
+        function setupOrbitControls() {
+            window.addEventListener('mousedown', (e) => {
+                if (e.target.closest('#controls-panel, #header-hud, #telemetry-hud, #quick-actions, #planet-panel, #planet-timeline, #event-toast')) return;
+                state.isDragging = true;
+                state.isPanning = e.button === 2 || e.shiftKey;
+                state.lastMouseX = e.clientX;
+                state.lastMouseY = e.clientY;
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!state.isDragging) return;
+                const dx = e.clientX - state.lastMouseX;
+                const dy = e.clientY - state.lastMouseY;
+
+                if (state.isPanning) {
+                    const panSpeed = 0.02 * (state.camDist / 15.0);
+                    state.camTarget[0] -= dx * panSpeed * Math.cos(state.camYaw);
+                    state.camTarget[2] -= dx * panSpeed * Math.sin(state.camYaw);
+                    state.camTarget[1] += dy * panSpeed;
+                } else {
+                    state.camYaw += dx * 0.005;
+                    state.camPitch += dy * 0.005;
+                    // Clamp pitch to avoid gimbal flip
+                    state.camPitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, state.camPitch));
+                }
+
+                state.lastMouseX = e.clientX;
+                state.lastMouseY = e.clientY;
+            });
+
+            window.addEventListener('mouseup', () => { state.isDragging = false; });
+            window.addEventListener('contextmenu', (e) => {
+                if (!e.target.closest('#controls-panel, #header-hud, #telemetry-hud, #planet-panel, #planet-timeline, #quick-actions')) {
+                    e.preventDefault();
+                }
+            });
+
+            // Wheel zoom
+            window.addEventListener('wheel', (e) => {
+                if (e.target.closest('#controls-panel')) return;
+                state.targetDist += e.deltaY * 0.015;
+                state.targetDist = Math.max(4.0, Math.min(70.0, state.targetDist));
+            }, { passive: true });
+
+            // Touch support for mobile
+            let touchStartDist = 0;
+            window.addEventListener('touchstart', (e) => {
+                if (e.target.closest('#controls-panel, #header-hud, #telemetry-hud, #quick-actions, #planet-panel, #planet-timeline')) { state.isDragging = false; return; }
+                if (e.touches.length === 1) {
+                    state.isDragging = true;
+                    state.lastMouseX = e.touches[0].clientX;
+                    state.lastMouseY = e.touches[0].clientY;
+                } else if (e.touches.length === 2) {
+                    touchStartDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                }
+            });
+
+            window.addEventListener('touchmove', (e) => {
+                if (e.target.closest('#controls-panel, #planet-panel, #planet-timeline')) return;
+                if (state.isDragging && e.touches.length === 1) {
+                    const dx = e.touches[0].clientX - state.lastMouseX;
+                    const dy = e.touches[0].clientY - state.lastMouseY;
+                    state.camYaw += dx * 0.005;
+                    state.camPitch += dy * 0.005;
+                    state.camPitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, state.camPitch));
+                    state.lastMouseX = e.touches[0].clientX;
+                    state.lastMouseY = e.touches[0].clientY;
+                } else if (e.touches.length === 2) {
+                    const dist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    const delta = touchStartDist - dist;
+                    state.targetDist += delta * 0.05;
+                    state.targetDist = Math.max(4.0, Math.min(70.0, state.targetDist));
+                    touchStartDist = dist;
+                }
+            });
+
+            window.addEventListener('touchend', () => { state.isDragging = false; });
+        }
+
+        function resizeCanvas() {
+            state.pixelRatio = Math.min(1.5, window.devicePixelRatio || 1);
+            const width = Math.max(1, Math.floor(window.innerWidth * state.renderScale * state.pixelRatio));
+            const height = Math.max(1, Math.floor(window.innerHeight * state.renderScale * state.pixelRatio));
+            if (canvas.width !== width || canvas.height !== height) {
+                canvas.width = width;
+                canvas.height = height;
+                gl.viewport(0, 0, width, height);
+            }
+            const trail = $('trail-canvas');
+            if (trail) {
+                const tw = Math.floor(window.innerWidth * state.pixelRatio), th = Math.floor(window.innerHeight * state.pixelRatio);
+                if (trail.width !== tw || trail.height !== th) { trail.width = tw; trail.height = th; }
+                trail.style.width = `${window.innerWidth}px`; trail.style.height = `${window.innerHeight}px`;
+            }
+        }
+
+
+        function render(now) {
+            const wallNow = now * 0.001;
+            const realDt = state.lastFrameTimestamp === null ? 0 : clamp(wallNow - state.lastFrameTimestamp, 0, 0.05);
+            state.lastFrameTimestamp = wallNow;
+            state.time = wallNow; // wall-clock only; FPS remains independent of simulation speed
+
+            frameCount++;
+            if (performance.now() - lastFpsUpdate >= 500) {
+                fps = Math.round((frameCount * 1000) / (performance.now() - lastFpsUpdate));
+                $('hud-fps').innerText = `${fps} FPS (${(1000 / Math.max(1, fps)).toFixed(1)}ms)`;
+                frameCount = 0;
+                lastFpsUpdate = performance.now();
+            }
+
+            // Simulation time is independent from requestAnimationFrame cadence. Speed affects
+            // u_time and orbital physics, but never the raw mouse/touch camera sensitivity.
+            let modelDt = 0;
+            if (!state.paused) {
+                state.simulationTime += realDt * state.speedMultiplier;
+                modelDt = realDt * state.speedMultiplier * MODEL_TIME_RATE;
+                if (state.environmentBlend < 1) {
+                    state.environmentBlend = Math.min(1, state.environmentBlend + realDt / 1.0);
+                    if (state.environmentBlend >= 1) state.environmentFrom = state.environmentTo;
+                }
+                if (planetExperiment.active) {
+                    if (planetExperiment.mode === 'replay') updateReplay(modelDt);
+                    else updatePlanetPhysics(modelDt);
+                }
+            } else if (state.environmentBlend < 1) {
+                // Transitions are a UI effect and can finish while the model clock is paused.
+                state.environmentBlend = Math.min(1, state.environmentBlend + realDt / 1.0);
+                if (state.environmentBlend >= 1) state.environmentFrom = state.environmentTo;
+            }
+
+            state.camDist += (state.targetDist - state.camDist) * 0.1;
+            updateTelemetry();
+
+            const cx = state.camTarget[0] + state.camDist * Math.cos(state.camPitch) * Math.sin(state.camYaw);
+            const cy = state.camTarget[1] + state.camDist * Math.sin(state.camPitch);
+            const cz = state.camTarget[2] + state.camDist * Math.cos(state.camPitch) * Math.cos(state.camYaw);
+
+            gl.uniform2f(uniforms.u_resolution, canvas.width, canvas.height);
+            gl.uniform3f(uniforms.u_camPos, cx, cy, cz);
+            gl.uniform3f(uniforms.u_camTarget, state.camTarget[0], state.camTarget[1], state.camTarget[2]);
+            gl.uniform3f(uniforms.u_camUp, 0.0, 1.0, 0.0);
+            gl.uniform1f(uniforms.u_time, state.simulationTime);
+            gl.uniform1f(uniforms.u_mass, state.mass);
+            gl.uniform1f(uniforms.u_spin, state.spin);
+            gl.uniform1f(uniforms.u_diskOuter, state.diskOuter);
+            gl.uniform1f(uniforms.u_diskBrightness, state.diskBrightness);
+            gl.uniform1f(uniforms.u_diskTemp, state.diskTemp);
+            gl.uniform1f(uniforms.u_diskDensity, state.diskDensity);
+            gl.uniform1i(uniforms.u_enableLensing, state.enableLensing ? 1 : 0);
+            gl.uniform1i(uniforms.u_enableDoppler, state.enableDoppler ? 1 : 0);
+            gl.uniform1i(uniforms.u_palette, state.palette);
+            gl.uniform1f(uniforms.u_skyIntensity, state.skyIntensity);
+            gl.uniform1f(uniforms.u_bgBrightness, state.backgroundBrightness);
+            gl.uniform1i(uniforms.u_environmentFrom, state.environmentFrom);
+            gl.uniform1i(uniforms.u_environmentTo, state.environmentTo);
+            gl.uniform1f(uniforms.u_environmentBlend, state.environmentBlend);
+            updatePlanetUniforms();
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            drawWorldOverlay([cx,cy,cz]);
+            requestAnimationFrame(render);
+        }
+
+        // Initialization Entrypoint
+        window.onload = () => {
+            if (initWebGL()) {
+                setupUI();
+                setupObservatoryControls();
+                setupOrbitControls();
+                window.addEventListener('resize', resizeCanvas);
+                resizeCanvas();
+                updateTelemetry();
+                requestAnimationFrame(render);
+            }
+        };
+    </script>
+</body>
+</html>
